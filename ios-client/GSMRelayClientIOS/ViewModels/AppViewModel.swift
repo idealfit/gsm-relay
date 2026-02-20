@@ -685,10 +685,9 @@ final class AppViewModel: ObservableObject {
     }
 
     private func nextFreeKnownSlot(in relay: Relay) -> Int? {
-        (relay.users ?? [])
-            .sorted { $0.id < $1.id }
-            .first(where: { ($0.known ?? false) && (($0.phone ?? "").isEmpty) })
-            ?.id
+        let users = (relay.users ?? []).sorted { $0.id < $1.id }
+        let slot = users.first(where: { ($0.known ?? false) && (($0.phone ?? "").isEmpty) })
+        return slot?.id
     }
 
     private func csvEscape(_ value: String) -> String {
