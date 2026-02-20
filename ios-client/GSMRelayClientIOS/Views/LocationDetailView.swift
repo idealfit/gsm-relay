@@ -11,6 +11,10 @@ struct LocationDetailView: View {
     @State private var deleteRelay: Relay?
     @State private var showAddUserToSelection = false
     @State private var selectedRelayIds: Set<Int64> = []
+    @State private var startDate = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+    @State private var endDate = Date()
+    @State private var isExportingEventsCsv = false
+    @State private var exportEventsCsv = ""
 
     var relays: [Relay] { vm.relaysInSelectedLocation() }
 
@@ -85,6 +89,12 @@ struct LocationDetailView: View {
         } message: {
             Text("Relay and associated data will be removed.")
         }
+        .fileExporter(
+            isPresented: $isExportingEventsCsv,
+            document: TextFileDocument(text: exportEventsCsv),
+            contentType: .commaSeparatedText,
+            defaultFilename: "events_\(locationName.replacingOccurrences(of: " ", with: "_"))"
+        ) { _ in }
     }
 
     private var relaysTab: some View {
@@ -170,14 +180,40 @@ struct LocationDetailView: View {
     }
 
     private var eventsTab: some View {
-        List(vm.eventsForSelectedLocation(), id: \.id) { ev in
-            VStack(alignment: .leading, spacing: 4) {
-                Text(ev.relayName.isEmpty ? ev.relayPhone : ev.relayName).font(.headline)
-                Text("Operator: \(ev.operatorPhone)").font(.caption).foregroundStyle(.secondary)
-                Text(formatMillis(ev.timestamp)).font(.caption).foregroundStyle(.secondary)
-                Text(ev.message).font(.footnote)
+        List {
+            DatePicker("From", selection: $startDate)
+            DatePicker("To", selection: $endDate)
+            HStack {
+                Button("Scrape location") {
+                    let start = Int64(startDate.timeIntervalSince1970 * 1000)
+                    let end = Int64(endDate.timeIntervalSince1970 * 1000)
+                    Task {
+                        for relay in relays {
+                            await vm.requestScrapeEvents(relay, start: start, end: end)
+                        }
+                    }
+                }
+                .disabled(relays.isEmpty)
+
+                Button("Export CSV") {
+                    let start = Int64(startDate.timeIntervalSince1970 * 1000)
+                    let end = Int64(endDate.timeIntervalSince1970 * 1000)
+                    exportEventsCsv = vm.buildEventsCsv(events: vm.eventsForSelectedLocation(start: start, end: end))
+                    isExportingEventsCsv = true
+                }
             }
-            .padding(.vertical, 2)
+
+            let start = Int64(startDate.timeIntervalSince1970 * 1000)
+            let end = Int64(endDate.timeIntervalSince1970 * 1000)
+            ForEach(vm.eventsForSelectedLocation(start: start, end: end), id: \.id) { ev in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ev.relayName.isEmpty ? ev.relayPhone : ev.relayName).font(.headline)
+                    Text("Operator: \(ev.operatorPhone)").font(.caption).foregroundStyle(.secondary)
+                    Text(formatMillis(ev.timestamp)).font(.caption).foregroundStyle(.secondary)
+                    Text(ev.message).font(.footnote)
+                }
+                .padding(.vertical, 2)
+            }
         }
     }
 

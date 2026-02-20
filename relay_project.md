@@ -118,6 +118,9 @@ node index.js
   - tabs releu: utilizatori / comenzi / coada / istoric / evenimente / notificari
   - operatii: add/edit/delete locatie, add/edit/delete releu, add/delete user, bulk user pe selectie
   - comenzi rapide: query users, change password, timer, ALL/AUT, scrape events
+  - CSV users: import + export
+  - CSV events: export per relay + per location
+  - filtre interval timp pentru events (relay/location)
 - Deliberat exclus din iOS:
   - gateway/SMS orchestration (ramane pe Android Gateway)
 

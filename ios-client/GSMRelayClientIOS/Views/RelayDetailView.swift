@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RelayDetailView: View {
     @EnvironmentObject private var vm: AppViewModel
@@ -72,6 +73,9 @@ private struct RelayUsersTab: View {
 
     @State private var showAddUser = false
     @State private var query = ""
+    @State private var isImportingCsv = false
+    @State private var isExportingCsv = false
+    @State private var exportCsvText = ""
 
     private var users: [RelayUser] {
         (relay.users ?? []).filter { user in
@@ -92,6 +96,11 @@ private struct RelayUsersTab: View {
 
             HStack {
                 Button("Add") { showAddUser = true }
+                Button("Import CSV") { isImportingCsv = true }
+                Button("Export CSV") {
+                    exportCsvText = vm.buildUsersCsv(for: relay)
+                    isExportingCsv = true
+                }
                 Spacer()
             }
 
@@ -123,6 +132,28 @@ private struct RelayUsersTab: View {
                 }
             }
         }
+        .fileImporter(
+            isPresented: $isImportingCsv,
+            allowedContentTypes: [.plainText, .commaSeparatedText],
+            allowsMultipleSelection: false
+        ) { result in
+            if case let .success(urls) = result, let url = urls.first {
+                Task {
+                    do {
+                        let text = try String(contentsOf: url, encoding: .utf8)
+                        await vm.importUsersCsv(for: relay, csvText: text)
+                    } catch {
+                        // Ignore read errors; vm status bar remains unchanged.
+                    }
+                }
+            }
+        }
+        .fileExporter(
+            isPresented: $isExportingCsv,
+            document: TextFileDocument(text: exportCsvText),
+            contentType: .commaSeparatedText,
+            defaultFilename: "\(relay.displayName)_users"
+        ) { _ in }
     }
 }
 
@@ -313,20 +344,32 @@ private struct RelayEventsTab: View {
 
     @State private var startDate = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
     @State private var endDate = Date()
+    @State private var isExportingCsv = false
+    @State private var exportCsvText = ""
 
     var body: some View {
         List {
             DatePicker("From", selection: $startDate)
             DatePicker("To", selection: $endDate)
-            Button("Scrape") {
-                let start = Int64(startDate.timeIntervalSince1970 * 1000)
-                let end = Int64(endDate.timeIntervalSince1970 * 1000)
-                Task {
-                    await vm.requestScrapeEvents(relay, start: start, end: end)
+            HStack {
+                Button("Scrape") {
+                    let start = Int64(startDate.timeIntervalSince1970 * 1000)
+                    let end = Int64(endDate.timeIntervalSince1970 * 1000)
+                    Task {
+                        await vm.requestScrapeEvents(relay, start: start, end: end)
+                    }
+                }
+                Button("Export CSV") {
+                    let start = Int64(startDate.timeIntervalSince1970 * 1000)
+                    let end = Int64(endDate.timeIntervalSince1970 * 1000)
+                    exportCsvText = vm.buildEventsCsv(events: vm.eventsForRelay(relay, start: start, end: end))
+                    isExportingCsv = true
                 }
             }
 
-            ForEach(vm.eventsForRelay(relay), id: \.id) { ev in
+            let start = Int64(startDate.timeIntervalSince1970 * 1000)
+            let end = Int64(endDate.timeIntervalSince1970 * 1000)
+            ForEach(vm.eventsForRelay(relay, start: start, end: end), id: \.id) { ev in
                 VStack(alignment: .leading, spacing: 4) {
                     Text(ev.relayName.isEmpty ? relay.displayName : ev.relayName).font(.headline)
                     Text("Operator: \(ev.operatorPhone)").font(.caption).foregroundStyle(.secondary)
@@ -335,6 +378,12 @@ private struct RelayEventsTab: View {
                 }
             }
         }
+        .fileExporter(
+            isPresented: $isExportingCsv,
+            document: TextFileDocument(text: exportCsvText),
+            contentType: .commaSeparatedText,
+            defaultFilename: "\(relay.displayName)_events"
+        ) { _ in }
     }
 }
 

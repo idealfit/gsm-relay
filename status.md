@@ -42,6 +42,16 @@ Starea proiectului este buna pentru continuare. Fluxul de onboarding releu a fos
 - UI iOS refacut pe flow-ul Android:
   - `Locations -> Location detail (Relee/Coada/Evenimente) -> Relay detail (Utilizatori/Comenzi/Coada/Istoric/Evenimente/Notificari)`
 
+### iOS Client - paritate functionala extinsa (2026-02-20)
+- Adaugat import/export CSV pentru utilizatori pe releu.
+- Adaugat export CSV pentru evenimente pe releu si pe locatie.
+- Adaugat filtrare interval timp pe evenimente (releu + locatie).
+- Adaugat `Scrape` pe interval pentru releu si `Scrape location` pentru toate releele din locatie.
+- Adaugate validari suplimentare:
+  - query users cu interval invalid,
+  - scrape interval invalid,
+  - add user pe slot neverificat sau ocupat.
+
 ## Ce s-a schimbat azi (important)
 
 ### 1) Fix major onboarding (blocaj dupa prima comanda)

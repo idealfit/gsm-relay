@@ -254,8 +254,26 @@ final class AppViewModel: ObservableObject {
 
     func addUser(relayId: Int64, userId: Int, phone: String, name: String, group: String) async {
         guard let relay = relays.first(where: { $0.id == relayId }) else { return }
-        let command = "\(relay.password)A\(String(format: "%03d", userId))#\(phone)#"
-        let description = "Add user \(name.isEmpty ? phone : name) (\(group))"
+        let users = relay.users ?? []
+        guard let slot = users.first(where: { $0.id == userId }) else {
+            addNotification("Invalid user slot", type: "error", relay: relay)
+            return
+        }
+        if (slot.known ?? false) == false {
+            addNotification("Slot \(userId) is not verified yet", type: "error", relay: relay)
+            return
+        }
+        if !(slot.phone ?? "").isEmpty {
+            addNotification("Slot \(userId) is already used", type: "error", relay: relay)
+            return
+        }
+        let normalizedPhone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedPhone.isEmpty {
+            addNotification("Phone is required", type: "error", relay: relay)
+            return
+        }
+        let command = "\(relay.password)A\(String(format: "%03d", userId))#\(normalizedPhone)#"
+        let description = "Add user \(name.isEmpty ? normalizedPhone : name) (\(group))"
         let result = await api.createCommand(
             config: config,
             relayPhone: relay.phoneNumber,
@@ -267,7 +285,7 @@ final class AppViewModel: ObservableObject {
             addNotification("User add command failed", type: "error", relay: relay)
             return
         }
-        applyUserPatch(relayId: relayId, userId: userId, phone: phone, name: name, group: group, known: true)
+        applyUserPatch(relayId: relayId, userId: userId, phone: normalizedPhone, name: name, group: group, known: true)
         addHistory(relay: relay, command: command, description: description, status: "queued")
         await syncCommands()
         await uploadSnapshotNow()
@@ -295,11 +313,25 @@ final class AppViewModel: ObservableObject {
     }
 
     func addUserToRelays(relayIds: [Int64], phone: String, name: String, group: String) async {
+        var success = 0
+        var errors = 0
         for relayId in relayIds {
             guard let relay = relays.first(where: { $0.id == relayId }) else { continue }
             let slot = relay.users?.sorted(by: { $0.id < $1.id }).first(where: { ($0.known ?? false) && (($0.phone ?? "").isEmpty) })
-            guard let userSlot = slot else { continue }
+            guard let userSlot = slot else {
+                errors += 1
+                continue
+            }
             await addUser(relayId: relayId, userId: userSlot.id, phone: phone, name: name, group: group)
+            success += 1
+        }
+        if success > 0 {
+            addNotification(
+                "User added on \(success) relays" + (errors > 0 ? " (\(errors) errors)" : ""),
+                type: errors == 0 ? "success" : "info"
+            )
+        } else {
+            addNotification("No relay accepted user add", type: "error")
         }
     }
 
@@ -308,6 +340,10 @@ final class AppViewModel: ObservableObject {
     func queryUsers(_ relay: Relay, start: Int, end: Int) async {
         let safeStart = min(max(start, 1), 200)
         let safeEnd = min(max(end, 1), 200)
+        if safeStart > safeEnd {
+            addNotification("Invalid range for query", type: "error", relay: relay)
+            return
+        }
         await sendSimpleCommand(
             relay: relay,
             command: "\(relay.password)AL\(String(format: "%03d", safeStart))#\(String(format: "%03d", safeEnd))#",
@@ -341,6 +377,10 @@ final class AppViewModel: ObservableObject {
     }
 
     func requestScrapeEvents(_ relay: Relay, start: Int64, end: Int64) async {
+        if start <= 0 || end <= 0 || start > end {
+            addNotification("Invalid scrape interval", type: "error", relay: relay)
+            return
+        }
         await sendSimpleCommand(
             relay: relay,
             command: "SCRAPE_EVENTS|\(start)|\(end)",
@@ -391,6 +431,10 @@ final class AppViewModel: ObservableObject {
             .sorted { $0.timestamp > $1.timestamp }
     }
 
+    func eventsForSelectedLocation(start: Int64, end: Int64) -> [RelayEvent] {
+        eventsForSelectedLocation().filter { $0.timestamp >= start && $0.timestamp <= end }
+    }
+
     func queueForRelay(_ relay: Relay) -> [CommandQueueItem] {
         let key = relayPhoneKey(relay.phoneNumber)
         return commands.filter { relayPhoneKey($0.relayPhone) == key }.sorted { $0.createdAt > $1.createdAt }
@@ -404,6 +448,10 @@ final class AppViewModel: ObservableObject {
     func eventsForRelay(_ relay: Relay) -> [RelayEvent] {
         let key = relayPhoneKey(relay.phoneNumber)
         return events.filter { relayPhoneKey($0.relayPhone) == key }.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    func eventsForRelay(_ relay: Relay, start: Int64, end: Int64) -> [RelayEvent] {
+        eventsForRelay(relay).filter { $0.timestamp >= start && $0.timestamp <= end }
     }
 
     func notificationsForRelay(_ relay: Relay) -> [AppNotification] {
@@ -554,6 +602,164 @@ final class AppViewModel: ObservableObject {
         let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Fara locatie" : trimmed
     }
+
+    // MARK: - CSV
+
+    func buildUsersCsv(for relay: Relay) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy"
+        let header = "ID,Telefon,Nume,Grup,Data_Adaugare"
+        let rows = (relay.users ?? [])
+            .filter { !($0.phone ?? "").isEmpty }
+            .sorted { $0.id < $1.id }
+            .map { user in
+                let dateText: String
+                if let added = user.addedDate, added > 0 {
+                    let date = Date(timeIntervalSince1970: TimeInterval(added) / 1000)
+                    dateText = formatter.string(from: date)
+                } else {
+                    dateText = ""
+                }
+                let id = String(user.id)
+                let phone = csvEscape(user.phone ?? "")
+                let name = csvEscape(user.name ?? "")
+                let group = csvEscape(user.group ?? "general")
+                let addedEscaped = csvEscape(dateText)
+                return "\(id),\(phone),\(name),\(group),\(addedEscaped)"
+            }
+        return rows.isEmpty ? header : header + "\n" + rows.joined(separator: "\n")
+    }
+
+    func buildEventsCsv(events source: [RelayEvent]) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        let header = "Timp,Releu,Telefon Releu,Operat de,Mesaj"
+        let rows = source.sorted { $0.timestamp > $1.timestamp }.map { ev in
+            let time = formatter.string(from: Date(timeIntervalSince1970: TimeInterval(ev.timestamp) / 1000))
+            return "\(csvEscape(time)),\(csvEscape(ev.relayName)),\(csvEscape(ev.relayPhone)),\(csvEscape(ev.operatorPhone)),\(csvEscape(ev.message))"
+        }
+        return rows.isEmpty ? header : header + "\n" + rows.joined(separator: "\n")
+    }
+
+    func importUsersCsv(for relay: Relay, csvText: String) async {
+        let rows = parseCsvRows(csvText)
+        guard !rows.isEmpty else {
+            addNotification("CSV is empty", type: "error", relay: relay)
+            return
+        }
+        let header = rows.first?.map { $0.lowercased() } ?? []
+        let hasHeader = header.contains("telefon") || header.contains("phone") || header.contains("id")
+        let dataRows = hasHeader ? Array(rows.dropFirst()) : rows
+
+        var success = 0
+        var errors = 0
+        for row in dataRows {
+            let id = parseUserId(row: row, header: header, hasHeader: hasHeader) ?? 0
+            let phone = parseField(row: row, header: header, hasHeader: hasHeader, keys: ["telefon", "phone"], fallbackIndex: 1)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = parseField(row: row, header: header, hasHeader: hasHeader, keys: ["nume", "name"], fallbackIndex: 2)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let group = parseField(row: row, header: header, hasHeader: hasHeader, keys: ["grup", "group"], fallbackIndex: 3)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if phone.isEmpty {
+                errors += 1
+                continue
+            }
+
+            var targetId = id
+            if targetId <= 0 {
+                targetId = nextFreeKnownSlot(in: relay) ?? 0
+            }
+            if targetId <= 0 || targetId > 200 {
+                errors += 1
+                continue
+            }
+            await addUser(relayId: relay.id, userId: targetId, phone: phone, name: name, group: group.isEmpty ? "general" : group)
+            success += 1
+        }
+        addNotification(
+            "CSV import: \(success) queued, \(errors) errors",
+            type: errors == 0 ? "success" : "info",
+            relay: relay
+        )
+    }
+
+    private func nextFreeKnownSlot(in relay: Relay) -> Int? {
+        (relay.users ?? [])
+            .sorted { $0.id < $1.id }
+            .first(where: { ($0.known ?? false) && (($0.phone ?? "").isEmpty) })
+            ?.id
+    }
+
+    private func csvEscape(_ value: String) -> String {
+        if value.contains(",") || value.contains("\"") || value.contains("\n") {
+            return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }
+        return value
+    }
+
+    private func parseCsvRows(_ csv: String) -> [[String]] {
+        var rows: [[String]] = []
+        var row: [String] = []
+        var field = ""
+        var inQuotes = false
+        let text = csv.replacingOccurrences(of: "\r\n", with: "\n")
+        var index = text.startIndex
+
+        while index < text.endIndex {
+            let char = text[index]
+            if inQuotes {
+                if char == "\"" {
+                    let next = text.index(after: index)
+                    if next < text.endIndex && text[next] == "\"" {
+                        field.append("\"")
+                        index = next
+                    } else {
+                        inQuotes = false
+                    }
+                } else {
+                    field.append(char)
+                }
+            } else {
+                if char == "\"" {
+                    inQuotes = true
+                } else if char == "," {
+                    row.append(field)
+                    field = ""
+                } else if char == "\n" {
+                    row.append(field)
+                    if row.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                        rows.append(row)
+                    }
+                    row = []
+                    field = ""
+                } else {
+                    field.append(char)
+                }
+            }
+            index = text.index(after: index)
+        }
+
+        row.append(field)
+        if row.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+            rows.append(row)
+        }
+        return rows
+    }
+
+    private func parseUserId(row: [String], header: [String], hasHeader: Bool) -> Int? {
+        if hasHeader, let index = header.firstIndex(where: { $0 == "id" }) {
+            return Int(row[safe: index] ?? "")
+        }
+        return Int(row[safe: 0] ?? "")
+    }
+
+    private func parseField(row: [String], header: [String], hasHeader: Bool, keys: [String], fallbackIndex: Int) -> String {
+        if hasHeader, let idx = header.firstIndex(where: { keys.contains($0) }) {
+            return row[safe: idx] ?? ""
+        }
+        return row[safe: fallbackIndex] ?? ""
+    }
 }
 
 private extension Array where Element == String {
@@ -569,6 +775,13 @@ private extension Array where Element == String {
 
     func sortedCaseInsensitive() -> [String] {
         self.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        guard indices.contains(index) else { return nil }
+        return self[index]
     }
 }
 
