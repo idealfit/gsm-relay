@@ -17,6 +17,9 @@ struct LocationDetailView: View {
     @State private var exportEventsCsv = ""
 
     var relays: [Relay] { vm.relaysInSelectedLocation() }
+    private var startMillis: Int64 { Int64(startDate.timeIntervalSince1970 * 1000) }
+    private var endMillis: Int64 { Int64(endDate.timeIntervalSince1970 * 1000) }
+    private var filteredEvents: [RelayEvent] { vm.eventsForSelectedLocation(start: startMillis, end: endMillis) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -185,27 +188,21 @@ struct LocationDetailView: View {
             DatePicker("To", selection: $endDate)
             HStack {
                 Button("Scrape location") {
-                    let start = Int64(startDate.timeIntervalSince1970 * 1000)
-                    let end = Int64(endDate.timeIntervalSince1970 * 1000)
                     Task {
                         for relay in relays {
-                            await vm.requestScrapeEvents(relay, start: start, end: end)
+                            await vm.requestScrapeEvents(relay, start: startMillis, end: endMillis)
                         }
                     }
                 }
                 .disabled(relays.isEmpty)
 
                 Button("Export CSV") {
-                    let start = Int64(startDate.timeIntervalSince1970 * 1000)
-                    let end = Int64(endDate.timeIntervalSince1970 * 1000)
-                    exportEventsCsv = vm.buildEventsCsv(events: vm.eventsForSelectedLocation(start: start, end: end))
+                    exportEventsCsv = vm.buildEventsCsv(events: filteredEvents)
                     isExportingEventsCsv = true
                 }
             }
 
-            let start = Int64(startDate.timeIntervalSince1970 * 1000)
-            let end = Int64(endDate.timeIntervalSince1970 * 1000)
-            ForEach(vm.eventsForSelectedLocation(start: start, end: end), id: \.id) { ev in
+            ForEach(filteredEvents, id: \.id) { ev in
                 VStack(alignment: .leading, spacing: 4) {
                     Text(ev.relayName.isEmpty ? ev.relayPhone : ev.relayName).font(.headline)
                     Text("Operator: \(ev.operatorPhone)").font(.caption).foregroundStyle(.secondary)

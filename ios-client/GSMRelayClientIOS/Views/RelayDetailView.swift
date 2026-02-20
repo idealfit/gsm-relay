@@ -346,6 +346,9 @@ private struct RelayEventsTab: View {
     @State private var endDate = Date()
     @State private var isExportingCsv = false
     @State private var exportCsvText = ""
+    private var startMillis: Int64 { Int64(startDate.timeIntervalSince1970 * 1000) }
+    private var endMillis: Int64 { Int64(endDate.timeIntervalSince1970 * 1000) }
+    private var filteredEvents: [RelayEvent] { vm.eventsForRelay(relay, start: startMillis, end: endMillis) }
 
     var body: some View {
         List {
@@ -353,23 +356,17 @@ private struct RelayEventsTab: View {
             DatePicker("To", selection: $endDate)
             HStack {
                 Button("Scrape") {
-                    let start = Int64(startDate.timeIntervalSince1970 * 1000)
-                    let end = Int64(endDate.timeIntervalSince1970 * 1000)
                     Task {
-                        await vm.requestScrapeEvents(relay, start: start, end: end)
+                        await vm.requestScrapeEvents(relay, start: startMillis, end: endMillis)
                     }
                 }
                 Button("Export CSV") {
-                    let start = Int64(startDate.timeIntervalSince1970 * 1000)
-                    let end = Int64(endDate.timeIntervalSince1970 * 1000)
-                    exportCsvText = vm.buildEventsCsv(events: vm.eventsForRelay(relay, start: start, end: end))
+                    exportCsvText = vm.buildEventsCsv(events: filteredEvents)
                     isExportingCsv = true
                 }
             }
 
-            let start = Int64(startDate.timeIntervalSince1970 * 1000)
-            let end = Int64(endDate.timeIntervalSince1970 * 1000)
-            ForEach(vm.eventsForRelay(relay, start: start, end: end), id: \.id) { ev in
+            ForEach(filteredEvents, id: \.id) { ev in
                 VStack(alignment: .leading, spacing: 4) {
                     Text(ev.relayName.isEmpty ? relay.displayName : ev.relayName).font(.headline)
                     Text("Operator: \(ev.operatorPhone)").font(.caption).foregroundStyle(.secondary)
