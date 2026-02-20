@@ -1,0 +1,35 @@
+name: GSMRelayClientIOS
+options:
+  minimumXcodeGenVersion: 2.38.0
+settings:
+  base:
+    PRODUCT_NAME: GSMRelayClientIOS
+    SWIFT_VERSION: 5.9
+    DEVELOPMENT_TEAM: ""
+targets:
+  GSMRelayClientIOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: GSMRelayClientIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.idealfit.gsmrelay.iosclient
+        INFOPLIST_KEY_CFBundleDisplayName: GSM Relay Client
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        TARGETED_DEVICE_FAMILY: "1,2"
+    info:
+      path: GSMRelayClientIOS/Info.plist
+      properties:
+        CFBundleName: GSMRelayClientIOS
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UIApplicationSupportsIndirectInputEvents: YES
+        UILaunchStoryboardName: LaunchScreen
+        UIRequiredDeviceCapabilities:
+          - armv7
+          - gps

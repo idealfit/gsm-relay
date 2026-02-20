@@ -1,0 +1,24 @@
+﻿# OS / IDE
+.DS_Store
+Thumbs.db
+
+# Local tooling/cache
+.dotnet/
+.gradle/
+_backup_tmp/
+
+# Android build artifacts
+android/.gradle/
+android/app/build/
+android/build/
+
+# Windows build artifacts
+windows-ui/**/bin/
+windows-ui/**/obj/
+
+# Node deps/artifacts
+server-firebase/node_modules/
+
+# Local generated artifacts
+*.apk
+*.lnk

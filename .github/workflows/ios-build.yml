@@ -1,0 +1,58 @@
+name: iOS Client Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "master"]
+    paths:
+      - "ios-client/**"
+      - ".github/workflows/ios-build.yml"
+  pull_request:
+    paths:
+      - "ios-client/**"
+      - ".github/workflows/ios-build.yml"
+
+jobs:
+  build-ios-simulator:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        run: |
+          xcodegen generate --spec ios-client/project.yml --project ios-client
+          ls -la ios-client
+
+      - name: Build for iOS Simulator (no signing)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios-client/GSMRelayClientIOS.xcodeproj \
+            -scheme GSMRelayClientIOS \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package .app artifact
+        run: |
+          APP_PATH=$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -path "*Build/Products/Debug-iphonesimulator/GSMRelayClientIOS.app" | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "GSMRelayClientIOS.app not found in DerivedData"
+            exit 1
+          fi
+          mkdir -p ios-artifacts
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "ios-artifacts/GSMRelayClientIOS-simulator.app.zip"
+          echo "Packaged artifact: ios-artifacts/GSMRelayClientIOS-simulator.app.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GSMRelayClientIOS-simulator-app
+          path: ios-artifacts/GSMRelayClientIOS-simulator.app.zip
+          if-no-files-found: error
