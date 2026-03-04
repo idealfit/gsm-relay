@@ -1,0 +1,468 @@
+<Window x:Class="GSMRelayDesktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GSM Relay Desktop" Height="920" Width="1360"
+        Background="{StaticResource SurfaceBrush}">
+  <Grid Margin="14">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <Grid Grid.Row="0" Margin="8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="0.42*" MinWidth="320" />
+        <ColumnDefinition Width="8" />
+        <ColumnDefinition Width="0.58*" MinWidth="560" />
+      </Grid.ColumnDefinitions>
+
+      <Border Grid.Column="0" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="12">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="1.1*" MinHeight="120" />
+            <RowDefinition Height="8" />
+            <RowDefinition Height="1.3*" MinHeight="200" />
+          </Grid.RowDefinitions>
+
+          <Grid Grid.Row="0" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Locatii" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
+            <Button Grid.Column="1"
+                    Content="Adauga locatie"
+                    Click="OpenAddLocationDialog_Click"
+                    Style="{StaticResource PrimaryButtonStyle}"/>
+          </Grid>
+
+          <ListBox Grid.Row="1"
+                   ItemsSource="{Binding Locations}"
+                   SelectedItem="{Binding SelectedLocation}"
+                   HorizontalContentAlignment="Stretch"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemContainerStyle>
+              <Style TargetType="ListBoxItem">
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+              </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Border Margin="0,2" Padding="2,3">
+                  <Grid VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding}"
+                               FontWeight="Bold"
+                               FontSize="12"
+                               Margin="0,0,8,6"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"/>
+                    <WrapPanel Grid.Column="1"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center">
+                      <Button Content="Add relay"
+                              Style="{StaticResource SmallButtonStyle}"
+                              Margin="0,0,6,6"
+                              Click="OpenRelayDialogForLocation_Click"
+                              Tag="{Binding}"/>
+                      <Button Content="Rename"
+                              Style="{StaticResource SmallSecondaryButtonStyle}"
+                              Margin="0,0,6,6"
+                              Command="{Binding DataContext.EditLocationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                              CommandParameter="{Binding}"/>
+                      <Button Content="Delete"
+                              Style="{StaticResource SmallDangerButtonStyle}"
+                              Margin="0,0,0,6"
+                              Command="{Binding DataContext.DeleteLocationFromListCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                              CommandParameter="{Binding}"/>
+                    </WrapPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <GridSplitter Grid.Row="2"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        Height="8"
+                        ResizeDirection="Rows"
+                        ResizeBehavior="PreviousAndNext"
+                        ShowsPreview="True"
+                        Cursor="SizeNS"
+                        Background="#D4DEE8"/>
+
+          <StackPanel Grid.Row="3" Margin="0,10,0,0">
+            <TextBlock Text="Setari server" FontWeight="Bold" FontSize="16" Margin="0,0,0,8"/>
+            <TextBlock Text="Configurare conexiune intre desktop, gateway si cloud." Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12"/>
+
+            <TextBlock FontWeight="SemiBold" Text="Server URL" />
+            <TextBox Text="{Binding ServerConfig.BaseUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8" />
+
+            <TextBlock FontWeight="SemiBold" Text="User" />
+            <TextBox Text="{Binding ServerConfig.Username, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8" />
+
+            <TextBlock FontWeight="SemiBold" Text="Password" />
+            <TextBox Text="{Binding ServerConfig.Password, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8" />
+
+            <TextBlock FontWeight="SemiBold" Text="Gateway ID" />
+            <TextBox Text="{Binding ServerConfig.GatewayId, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8" />
+
+            <TextBlock FontWeight="SemiBold" Text="Master Phone" />
+            <TextBox Text="{Binding ServerConfig.MasterPhone, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,10" />
+
+            <WrapPanel>
+              <Button Content="Refresh" Command="{Binding RefreshCommand}" Margin="0,0,8,8"/>
+              <Button Content="Upload" Command="{Binding UploadSnapshotCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,8"/>
+            </WrapPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <GridSplitter Grid.Column="1"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    Width="8"
+                    ResizeDirection="Columns"
+                    ResizeBehavior="PreviousAndNext"
+                    ShowsPreview="True"
+                    Cursor="SizeWE"
+                    Background="#D4DEE8"/>
+
+      <Border Grid.Column="2" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="12">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="1.1*" MinHeight="220" />
+            <RowDefinition Height="8" />
+            <RowDefinition Height="1.6*" MinHeight="260" />
+          </Grid.RowDefinitions>
+
+          <TextBlock Grid.Row="0" Text="{Binding SelectedLocation, StringFormat=Locatie: {0}}" FontWeight="Bold" FontSize="16" Margin="0,0,0,8"/>
+
+          <TabControl Grid.Row="1">
+            <TabItem Header="Relee">
+              <Grid Margin="8">
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <WrapPanel Grid.Row="0" Margin="0,0,0,8">
+                  <TextBlock Text="{Binding SelectedLocationRelaySummary}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,8"/>
+                  <Button Content="Selecteaza toate releele"
+                          Command="{Binding SelectAllLocationRelaysCommand}"
+                          Style="{StaticResource SecondaryButtonStyle}"
+                          Margin="0,0,8,8"/>
+                  <Button Content="Adauga utilizator pe selectie"
+                          Style="{StaticResource PrimaryButtonStyle}"
+                          Click="OpenAddUserForSelectionDialog_Click"
+                          Margin="0,0,8,8"/>
+                </WrapPanel>
+
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding LocationRelaySelections}"
+                         SelectedValuePath="Relay"
+                         SelectedValue="{Binding SelectedRelay, Mode=TwoWay}"
+                         HorizontalContentAlignment="Stretch"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                  <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    </Style>
+                  </ListBox.ItemContainerStyle>
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Grid Margin="0,2">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="Auto"/>
+                          <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <CheckBox Grid.Column="0"
+                                  IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                  VerticalAlignment="Top"
+                                  Margin="0,3,8,0"/>
+
+                        <Grid Grid.Column="1">
+                          <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                          </Grid.RowDefinitions>
+
+                          <Grid Grid.Row="0" VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="*" />
+                              <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Relay.DisplayName}"
+                                       Grid.Column="0"
+                                       FontWeight="Bold"
+                                       FontSize="12"
+                                       Margin="0,0,8,6"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <WrapPanel Grid.Column="1"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center">
+                              <Button Content="Edit"
+                                      Style="{StaticResource SmallSecondaryButtonStyle}"
+                                      Margin="0,0,6,6"
+                                      Command="{Binding DataContext.EditRelayCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                      CommandParameter="{Binding Relay}"/>
+                              <Button Content="Delete"
+                                      Style="{StaticResource SmallDangerButtonStyle}"
+                                      Margin="0,0,0,6"
+                                      Command="{Binding DataContext.DeleteRelayFromListCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                      CommandParameter="{Binding Relay}"/>
+                            </WrapPanel>
+                          </Grid>
+
+                          <TextBlock Grid.Row="1"
+                                     Text="{Binding Relay.PhoneNumber}"
+                                     Foreground="{StaticResource TextSecondaryBrush}"
+                                     FontSize="11"
+                                     Margin="0,0,0,2"/>
+                        </Grid>
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </Grid>
+            </TabItem>
+            <TabItem Header="Coada locatie">
+              <DataGrid ItemsSource="{Binding LocationCommands}" AutoGenerateColumns="False" CanUserAddRows="False">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
+                  <DataGridTextColumn Header="Releu" Binding="{Binding RelayPhone}" Width="140"/>
+                  <DataGridTextColumn Header="Comanda" Binding="{Binding Command}" Width="220"/>
+                  <DataGridTextColumn Header="Descriere" Binding="{Binding Description}" Width="*"/>
+                  <DataGridTextColumn Header="Sursa" Binding="{Binding Source}" Width="100"/>
+                  <DataGridTextColumn Header="Gateway" Binding="{Binding GatewayId}" Width="120"/>
+                  <DataGridTextColumn Header="Creat" Binding="{Binding CreatedAt}" Width="120"/>
+                  <DataGridTextColumn Header="Update" Binding="{Binding UpdatedAt}" Width="120"/>
+                  <DataGridTextColumn Header="Raspuns" Binding="{Binding ResponseText}" Width="160"/>
+                </DataGrid.Columns>
+              </DataGrid>
+            </TabItem>
+            <TabItem Header="Evenimente locatie">
+              <StackPanel>
+                <WrapPanel Margin="0,0,0,8">
+                  <Button Content="Export CSV locatie"
+                          Command="{Binding ExportLocationEventsCommand}"
+                          Style="{StaticResource SecondaryButtonStyle}"
+                          Margin="0,0,8,8"
+                          Padding="12,6"/>
+                </WrapPanel>
+                <DataGrid ItemsSource="{Binding LocationEvents}" AutoGenerateColumns="False" CanUserAddRows="False">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="Timp" Binding="{Binding TimeLocal}" Width="140"/>
+                    <DataGridTextColumn Header="Releu" Binding="{Binding RelayName}" Width="160"/>
+                    <DataGridTextColumn Header="Telefon Releu" Binding="{Binding RelayPhone}" Width="140"/>
+                    <DataGridTextColumn Header="Operat de" Binding="{Binding OperatorPhone}" Width="140"/>
+                    <DataGridTextColumn Header="Mesaj" Binding="{Binding Message}" Width="*"/>
+                  </DataGrid.Columns>
+                </DataGrid>
+              </StackPanel>
+            </TabItem>
+          </TabControl>
+
+          <GridSplitter Grid.Row="2"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        Height="8"
+                        ResizeDirection="Rows"
+                        ResizeBehavior="PreviousAndNext"
+                        ShowsPreview="True"
+                        Cursor="SizeNS"
+                        Background="#D4DEE8"/>
+
+          <Grid Grid.Row="3">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Margin="0,0,0,8">
+              <TextBlock Text="{Binding SelectedRelay.Name, StringFormat=Releu: {0}}" FontWeight="Bold" FontSize="16" Margin="0,0,0,8"/>
+              <Border Background="#F1F7FC"
+                      BorderBrush="#C8DBEA"
+                      BorderThickness="1"
+                      CornerRadius="8"
+                      Padding="10"
+                      Margin="0,0,0,6">
+                <Border.Style>
+                  <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding SetupStateVisible}" Value="True">
+                        <Setter Property="Visibility" Value="Visible"/>
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Border.Style>
+                <StackPanel>
+                  <TextBlock Text="{Binding SetupStateTitle}" FontWeight="Bold" FontSize="13"/>
+                  <TextBlock Text="{Binding SetupStateDetails}" Margin="0,4,0,0"/>
+                  <TextBlock Text="{Binding SetupWaitingMarker}" Margin="0,2,0,0" Foreground="{StaticResource TextSecondaryBrush}"/>
+                  <TextBlock Text="{Binding SetupElapsed}" Margin="0,2,0,0" Foreground="{StaticResource TextSecondaryBrush}"/>
+                  <TextBlock Text="{Binding SetupLastSms}" Margin="0,4,0,0" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+
+            <TabControl Grid.Row="1">
+              <TabItem Header="Utilizatori">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                  </Grid.RowDefinitions>
+                  <WrapPanel Grid.Row="0" Margin="0,0,0,10">
+                    <Button Content="Import CSV" Command="{Binding ImportCsvCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,8"/>
+                    <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,8"/>
+                    <Button Content="Delete All" Command="{Binding DeleteAllUsersCommand}" Style="{StaticResource DangerButtonStyle}" Margin="0,0,8,8"/>
+                    <Button Content="Sterge din baza" Command="{Binding ClearRelayDatabaseCommand}" Style="{StaticResource DangerButtonStyle}" Margin="0,0,8,8"/>
+                  </WrapPanel>
+                  <DataGrid Grid.Row="1" ItemsSource="{Binding VisibleUsers}" AutoGenerateColumns="False" CanUserAddRows="False">
+                    <DataGrid.Columns>
+                      <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="60"/>
+                      <DataGridTextColumn Header="Telefon" Binding="{Binding Phone}" Width="150"/>
+                      <DataGridTextColumn Header="Nume" Binding="{Binding Name}" Width="150"/>
+                      <DataGridTextColumn Header="Grup" Binding="{Binding Group}" Width="120"/>
+                      <DataGridTemplateColumn Header="Actiuni" Width="120">
+                        <DataGridTemplateColumn.CellTemplate>
+                          <DataTemplate>
+                            <Button Content="Sterge" Command="{Binding DataContext.DeleteUserCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" />
+                          </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                      </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                  </DataGrid>
+                </Grid>
+              </TabItem>
+              <TabItem Header="Comenzi">
+                <StackPanel>
+                  <TextBlock FontWeight="SemiBold" Text="Interogare utilizatori"/>
+                  <WrapPanel Margin="0,6,0,12">
+                    <TextBox Width="70" MinWidth="60" Text="{Binding QueryStart, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,8"/>
+                    <TextBox Width="70" MinWidth="60" Text="{Binding QueryEnd, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,8"/>
+                    <Button Content="Trimite" Command="{Binding QueryUsersCommand}" Margin="0,0,8,8"/>
+                    <Button Content="Sync SMS" Command="{Binding SyncSmsCommand}" Margin="0,0,8,8"/>
+                  </WrapPanel>
+                  <Separator/>
+                  <TextBlock FontWeight="SemiBold" Text="Schimbare parola" Margin="0,12,0,0"/>
+                  <WrapPanel Margin="0,6,0,12">
+                    <TextBox Width="140" MinWidth="120" Text="{Binding NewPassword, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,8"/>
+                    <Button Content="Trimite" Command="{Binding ChangePasswordCommand}" Margin="0,0,8,8"/>
+                  </WrapPanel>
+                  <Separator/>
+                  <TextBlock FontWeight="SemiBold" Text="Temporizare" Margin="0,12,0,0"/>
+                  <WrapPanel Margin="0,6,0,12">
+                    <TextBox Width="90" MinWidth="80" Text="{Binding TimerSeconds, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,8"/>
+                    <Button Content="Trimite" Command="{Binding TimerCommand}" Margin="0,0,8,8"/>
+                  </WrapPanel>
+                  <Separator/>
+                  <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Permite toti" Command="{Binding AllowAllCommand}" Margin="0,0,8,0"/>
+                    <Button Content="Permite autorizati" Command="{Binding AllowAuthorizedCommand}"/>
+                  </StackPanel>
+                </StackPanel>
+              </TabItem>
+              <TabItem Header="Coada comenzi">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                  </Grid.RowDefinitions>
+                  <WrapPanel Grid.Row="0" Margin="0,0,0,8">
+                    <Button Content="Opreste coada releu"
+                            Command="{Binding StopRelayQueueCommand}"
+                            Style="{StaticResource DangerButtonStyle}"
+                            Margin="0,0,8,8"/>
+                  </WrapPanel>
+                  <DataGrid Grid.Row="1" ItemsSource="{Binding RelayCommands}" AutoGenerateColumns="False" CanUserAddRows="False">
+                    <DataGrid.Columns>
+                      <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
+                      <DataGridTextColumn Header="Releu" Binding="{Binding RelayPhone}" Width="140"/>
+                      <DataGridTextColumn Header="Comanda" Binding="{Binding Command}" Width="220"/>
+                      <DataGridTextColumn Header="Descriere" Binding="{Binding Description}" Width="*"/>
+                      <DataGridTextColumn Header="Sursa" Binding="{Binding Source}" Width="100"/>
+                      <DataGridTextColumn Header="Gateway" Binding="{Binding GatewayId}" Width="120"/>
+                      <DataGridTextColumn Header="Creat" Binding="{Binding CreatedAt}" Width="120"/>
+                      <DataGridTextColumn Header="Update" Binding="{Binding UpdatedAt}" Width="120"/>
+                      <DataGridTextColumn Header="Raspuns" Binding="{Binding ResponseText}" Width="160"/>
+                    </DataGrid.Columns>
+                  </DataGrid>
+                </Grid>
+              </TabItem>
+              <TabItem Header="Istoric">
+                <DataGrid ItemsSource="{Binding RelayHistory}" AutoGenerateColumns="False" CanUserAddRows="False">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="Releu" Binding="{Binding RelayName}" Width="140"/>
+                    <DataGridTextColumn Header="Comanda" Binding="{Binding Command}" Width="200"/>
+                    <DataGridTextColumn Header="Descriere" Binding="{Binding Description}" Width="*"/>
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100"/>
+                    <DataGridTextColumn Header="Timp" Binding="{Binding Timestamp}" Width="120"/>
+                  </DataGrid.Columns>
+                </DataGrid>
+              </TabItem>
+              <TabItem Header="Evenimente">
+                <StackPanel>
+                  <WrapPanel Margin="0,0,0,8">
+                    <StackPanel Width="180" MinWidth="160" Margin="0,0,12,8">
+                      <TextBlock FontWeight="SemiBold" Text="De la (data)" />
+                      <DatePicker SelectedDate="{Binding EventStartDate}" />
+                    </StackPanel>
+                    <StackPanel Width="120" MinWidth="100" Margin="0,0,12,8">
+                      <TextBlock FontWeight="SemiBold" Text="Ora" />
+                      <TextBox Text="{Binding EventStartTime, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                    <StackPanel Width="180" MinWidth="160" Margin="0,0,12,8">
+                      <TextBlock FontWeight="SemiBold" Text="Pana la (data)" />
+                      <DatePicker SelectedDate="{Binding EventEndDate}" />
+                    </StackPanel>
+                    <StackPanel Width="120" MinWidth="100" Margin="0,0,12,8">
+                      <TextBlock FontWeight="SemiBold" Text="Ora" />
+                      <TextBox Text="{Binding EventEndTime, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                    <Button Content="Scrape" Command="{Binding ScrapeEventsCommand}" Margin="0,18,12,8" Padding="12,6"/>
+                    <Button Content="Export CSV" Command="{Binding ExportEventsCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,18,0,8" Padding="12,6"/>
+                  </WrapPanel>
+                  <DataGrid ItemsSource="{Binding RelayEvents}" AutoGenerateColumns="False" CanUserAddRows="False">
+                    <DataGrid.Columns>
+                      <DataGridTextColumn Header="Timp" Binding="{Binding TimeLocal}" Width="140"/>
+                      <DataGridTextColumn Header="Releu" Binding="{Binding RelayName}" Width="160"/>
+                      <DataGridTextColumn Header="Telefon Releu" Binding="{Binding RelayPhone}" Width="140"/>
+                      <DataGridTextColumn Header="Operat de" Binding="{Binding OperatorPhone}" Width="140"/>
+                      <DataGridTextColumn Header="Mesaj" Binding="{Binding Message}" Width="*"/>
+                    </DataGrid.Columns>
+                  </DataGrid>
+                </StackPanel>
+              </TabItem>
+              <TabItem Header="Notificari">
+                <DataGrid ItemsSource="{Binding Notifications}" AutoGenerateColumns="False" CanUserAddRows="False">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="Mesaj" Binding="{Binding Message}" Width="*"/>
+                    <DataGridTextColumn Header="Tip" Binding="{Binding Type}" Width="120"/>
+                    <DataGridTextColumn Header="Timp" Binding="{Binding Timestamp}" Width="120"/>
+                  </DataGrid.Columns>
+                </DataGrid>
+              </TabItem>
+            </TabControl>
+          </Grid>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,10,0,0">
+      <TextBlock Text="{Binding StatusMessage}" />
+    </Border>
+  </Grid>
+</Window>
