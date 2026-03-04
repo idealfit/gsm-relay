@@ -1,0 +1,63 @@
+<Window x:Class="GSMRelayDesktop.RelayEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Gestionare releu"
+        Height="560"
+        Width="460"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{StaticResource SurfaceBrush}">
+  <Border Margin="12" Padding="12" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <TextBlock Grid.Row="0" Text="Releu (adauga / editeaza / sterge)" FontSize="16" FontWeight="Bold" Margin="0,0,0,12"/>
+
+      <StackPanel Grid.Row="1" Margin="0,0,0,6">
+        <TextBlock Text="Nume" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+        <TextBox Text="{Binding NewRelayName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,0"/>
+      </StackPanel>
+
+      <StackPanel Grid.Row="2" Margin="0,0,0,6">
+        <TextBlock Text="Telefon" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+        <TextBox Text="{Binding NewRelayPhone, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,0"/>
+      </StackPanel>
+
+      <StackPanel Grid.Row="3" Margin="0,0,0,8">
+        <TextBlock Text="Parola se seteaza automat la onboarding (2005)." FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+      </StackPanel>
+
+      <StackPanel Grid.Row="4" Margin="0,0,0,8">
+        <TextBlock Text="Interval interogare initiala" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+        <WrapPanel>
+          <TextBox Width="80" Text="{Binding OnboardingQueryStart, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0"/>
+          <TextBox Width="80" Text="{Binding OnboardingQueryEnd, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0"/>
+        </WrapPanel>
+      </StackPanel>
+
+      <StackPanel Grid.Row="5" Margin="0,0,0,10">
+        <TextBlock Text="Comenzi initiale automate" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+        <CheckBox Content="Reset parola la 2005" IsChecked="{Binding OnboardingForcePasswordReset}" Margin="0,2,0,0"/>
+        <CheckBox Content="Setare data/ora" IsChecked="{Binding OnboardingSetDateTime}" Margin="0,2,0,0"/>
+        <CheckBox Content="Setare master (A001)" IsChecked="{Binding OnboardingSetMaster}" Margin="0,2,0,0"/>
+        <CheckBox Content="Mesaj confirmare ON" IsChecked="{Binding OnboardingConfirmOn}" Margin="0,2,0,0"/>
+        <CheckBox Content="Mesaj confirmare OFF" IsChecked="{Binding OnboardingConfirmOff}" Margin="0,2,0,0"/>
+        <CheckBox Content="Interogare utilizatori" IsChecked="{Binding OnboardingQueryUsers}" Margin="0,2,0,0"/>
+        <CheckBox Content="Inregistrare automata useri admin" IsChecked="{Binding OnboardingAutoAddAdmins}" Margin="0,2,0,0"/>
+      </StackPanel>
+
+      <WrapPanel Grid.Row="6">
+        <Button Content="Adauga releu" Click="AddRelay_Click" Margin="0,0,8,0" Padding="12,6"/>
+        <Button Content="Inchide" Click="Close_Click" Style="{StaticResource SecondaryButtonStyle}" Padding="12,6"/>
+      </WrapPanel>
+    </Grid>
+  </Border>
+</Window>

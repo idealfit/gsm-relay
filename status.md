@@ -52,6 +52,15 @@ Starea proiectului este buna pentru continuare. Fluxul de onboarding releu a fos
   - scrape interval invalid,
   - add user pe slot neverificat sau ocupat.
 
+### GitHub / CI iOS (final de zi)
+- Repo GitHub activ: `https://github.com/idealfit/gsm-relay`
+- Workflow iOS activ: `.github/workflows/ios-build.yml`
+- Build iOS pe Actions a rulat, dar a cazut pe eroare Swift:
+  - `AppViewModel.swift:691:13: expected ':' after '? ...' in ternary expression`
+- Fixul pentru aceasta eroare a fost pregatit local:
+  - functie `nextFreeKnownSlot(...)` rescrisa explicit (`slot?.id`) pentru compatibilitate Xcode 16.4.
+- Daca build-ul e inca rosu maine, primul pas este push la ultimul fix local si rerun workflow.
+
 ## Ce s-a schimbat azi (important)
 
 ### 1) Fix major onboarding (blocaj dupa prima comanda)
@@ -128,11 +137,64 @@ Asteptat: `{"ok":true}`
 - verifica in Coada ca statusul urmeaza: `pending` -> `sent_waiting` -> `done` pe masura ce vin SMS-urile.
 - daca releul e offline, statusul trebuie sa ramana `sent_waiting` pana la revenire.
 
+5. iOS CI unblock + test:
+- impinge ultimul fix iOS local (daca nu e deja in `origin/main`),
+- ruleaza `iOS Client Build` in GitHub Actions,
+- daca e verde: incepe UAT comparativ Android vs iOS,
+- daca e rosu: pastreaza doar primele linii `error:` din log pentru fix rapid.
+
 ## Observatii operationale
 - Din Gateway app comanda poate pleca direct SMS chiar daca serverul e picat.
 - Din Windows/Android Client comanda trece prin server; daca serverul e jos, ele nu pot queue-ui comenzi.
 
 ## Riscuri ramase (cunoscute)
-- Nu exista inca dashboard explicit de tip "setup step state machine" in UI (ex: STEP 3/6 waiting marker).
+- iOS inca necesita validare practica pe device/simulator dupa build verde in CI.
 - In continuare exista warning-uri minore Android deprecated API, fara impact functional imediat.
+
+## Update sesiune (2026-02-20 - sync hardening)
+
+### Obiectiv
+- S-a lucrat pe "simbioza" Windows + Android Client + Android Gateway, cu SMS ca sursa de confirmare pentru executie.
+
+### Fixuri implementate azi
+- Server (`server-firebase/index.js`):
+  - `/api/commands`:
+    - `pending` ramane ordonat ASC (executie corecta pe gateway),
+    - restul statusurilor sunt livrate DESC (UI vede comenzile cele mai noi),
+    - limita marita pentru UI pana la 1000.
+  - `ack-relay` primeste si `gatewayId` (ACK corect pe gateway-ul curent).
+- Windows (`windows-ui/GSMRelayDesktop/ViewModels/MainViewModel.cs`):
+  - auto-refresh redus la 10 secunde,
+  - lista comenzi marita la 1000 pentru vizibilitate setup curent.
+- Android Client:
+  - fetch queue marit la 1000 (`AppViewModel.kt`, `ServerApi.kt`).
+- Android Gateway:
+  - ACK din `SmsReceiver` merge si cand releul nu e inca in cache local (fallback pe `fromNumber`),
+  - `CommandPollService`:
+    - retry status update cu backoff scurt,
+    - guard anti-duplicate pe `commandId` (nu retrimite aceeasi comanda imediat),
+    - recovery pentru `sent_waiting`: verifica marker SMS, marcheaza `done` daca exista confirmare, altfel retry controlat.
+
+### Incident gestionat: releu `0731373297`
+- Simptom: trimiteri continue desi setup vizual parea finalizat.
+- Cauza: comenzi legacy cu status `sent` ramase in coada (vechi), reluate de recovery.
+- Corectie:
+  - recovery pe gateway pentru `sent` este restrictionat doar la comenzi setup + doar daca sunt recente (fereastra limitata),
+  - cleanup punctual executat pe DB local server: `sent` vechi pentru `0731373297` marcate `failed`.
+
+### Contract functional consolidat
+- SMS confirma executia reala.
+- Gateway executa, parseaza SMS, actualizeaza statusurile in server.
+- Server ramane sursa unica de adevar pentru coada (`pending`, `sent_waiting`, `done`, `failed`).
+- Windows/Android Client afiseaza si orchestreaza, fara "confirmari locale" care pot diverge.
+
+### Build-uri validate in aceasta sesiune
+- `dotnet build windows-ui/GSMRelayDesktop/GSMRelayDesktop.csproj -c Debug --no-restore` -> OK
+- `.\gradlew.bat :app:assembleDebug :app:assembleGatewayDebug` -> OK
+
+### Artefacte livrate in root proiect (regula operationala)
+- `GSMRelayGateway-debug.apk`
+- `GSMRelayClient-debug.apk`
+- `GSMRelayDesktop.lnk` actualizat la:
+  - `windows-ui/GSMRelayDesktop/bin/Debug/net8.0-windows/GSMRelayDesktop.exe`
 

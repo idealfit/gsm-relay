@@ -47,7 +47,7 @@ struct RelayDetailView: View {
             Text(relay.phoneNumber).font(.subheadline).foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 let count = relay.users?.filter { !($0.phone ?? "").isEmpty }.count ?? 0
-                Text("\(count)/200 users")
+                Text("\(count)/999 users")
                     .font(.caption)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -170,7 +170,7 @@ private struct AddUserSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("User ID (1-200)", text: $userId)
+                TextField("User ID (1-999)", text: $userId)
                     .keyboardType(.numberPad)
                 TextField("Phone", text: $phone)
                     .keyboardType(.phonePad)
@@ -184,7 +184,7 @@ private struct AddUserSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Send") {
-                        let id = min(max(Int(userId) ?? 1, 1), 200)
+                        let id = min(max(Int(userId) ?? 1, 1), 999)
                         onAdd(id, phone, name, group)
                         dismiss()
                     }
@@ -237,7 +237,7 @@ private struct QueryUsersSheet: View {
     @Environment(\.dismiss) private var dismiss
     let onSend: (Int, Int) -> Void
     @State private var start = "1"
-    @State private var end = "200"
+    @State private var end = "999"
 
     var body: some View {
         NavigationStack {
@@ -250,7 +250,7 @@ private struct QueryUsersSheet: View {
                 ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Send") {
-                        onSend(Int(start) ?? 1, Int(end) ?? 200)
+                        onSend(Int(start) ?? 1, Int(end) ?? 999)
                         dismiss()
                     }
                 }

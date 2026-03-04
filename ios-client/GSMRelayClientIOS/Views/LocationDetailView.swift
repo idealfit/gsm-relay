@@ -51,8 +51,16 @@ struct LocationDetailView: View {
                 initialPhone: "",
                 initialPassword: "2005",
                 initialLocation: locationName == "Fara locatie" ? "" : locationName
-            ) { name, phone, password, location in
-                vm.addRelay(name: name, phone: phone, password: password, location: location)
+            ) { name, phone, password, location, queryStart, queryEnd, setupOptions in
+                vm.addRelay(
+                    name: name,
+                    phone: phone,
+                    password: password,
+                    location: location,
+                    queryStart: queryStart,
+                    queryEnd: queryEnd,
+                    setupOptions: setupOptions
+                )
             }
         }
         .sheet(item: $editingRelay) { relay in
@@ -62,7 +70,7 @@ struct LocationDetailView: View {
                 initialPhone: relay.phoneNumber,
                 initialPassword: relay.password,
                 initialLocation: relay.location ?? ""
-            ) { name, phone, password, location in
+            ) { name, phone, password, location, _, _, _ in
                 vm.updateRelay(relay.id, name: name, phone: phone, password: password, location: location)
             }
         }
@@ -135,7 +143,7 @@ struct LocationDetailView: View {
                         Text(relay.displayName).font(.headline)
                         Text(relay.phoneNumber).font(.subheadline).foregroundStyle(.secondary)
                         let userCount = relay.users?.filter { !($0.phone ?? "").isEmpty }.count ?? 0
-                        Text("\(userCount)/200 users").font(.caption).foregroundStyle(.secondary)
+                        Text("\(userCount)/999 users").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button {
@@ -264,12 +272,21 @@ private struct RelayEditSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let title: String
-    let onSave: (String, String, String, String) -> Void
+    let onSave: (String, String, String, String, Int, Int, RelaySetupOptions) -> Void
 
     @State private var name: String
     @State private var phone: String
     @State private var password: String
     @State private var location: String
+    @State private var queryStart = "001"
+    @State private var queryEnd = "999"
+    @State private var setupForcePassword = true
+    @State private var setupSetTime = true
+    @State private var setupSetMaster = true
+    @State private var setupConfirmOn = true
+    @State private var setupConfirmOff = true
+    @State private var setupQueryUsers = true
+    @State private var setupAutoAdmins = true
 
     init(
         title: String,
@@ -295,6 +312,23 @@ private struct RelayEditSheet: View {
                     .keyboardType(.phonePad)
                 TextField("Password", text: $password)
                 TextField("Location", text: $location)
+                if title == "New relay" {
+                    Section("Interogare initiala") {
+                        TextField("Start (001-999)", text: $queryStart)
+                            .keyboardType(.numberPad)
+                        TextField("End (001-999)", text: $queryEnd)
+                            .keyboardType(.numberPad)
+                    }
+                    Section("Comenzi initiale automate") {
+                        Toggle("Reset parola la 2005", isOn: $setupForcePassword)
+                        Toggle("Setare data/ora", isOn: $setupSetTime)
+                        Toggle("Setare master (A001)", isOn: $setupSetMaster)
+                        Toggle("Mesaj confirmare ON", isOn: $setupConfirmOn)
+                        Toggle("Mesaj confirmare OFF", isOn: $setupConfirmOff)
+                        Toggle("Interogare utilizatori", isOn: $setupQueryUsers)
+                        Toggle("Inregistrare automata useri admin", isOn: $setupAutoAdmins)
+                    }
+                }
             }
             .navigationTitle(title)
             .toolbar {
@@ -303,7 +337,18 @@ private struct RelayEditSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        onSave(name, phone, password, location)
+                        let start = min(max(Int(queryStart) ?? 1, 1), 999)
+                        let end = min(max(Int(queryEnd) ?? 999, 1), 999)
+                        let options = RelaySetupOptions(
+                            forcePasswordReset: setupForcePassword,
+                            setDateTime: setupSetTime,
+                            setMaster: setupSetMaster,
+                            setConfirmOn: setupConfirmOn,
+                            setConfirmOff: setupConfirmOff,
+                            queryUsers: setupQueryUsers,
+                            autoAddAdmins: setupAutoAdmins
+                        )
+                        onSave(name, phone, password, location, start, end, options)
                         dismiss()
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

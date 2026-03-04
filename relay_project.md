@@ -124,3 +124,76 @@ node index.js
 - Deliberat exclus din iOS:
   - gateway/SMS orchestration (ramane pe Android Gateway)
 
+## End of day note (2026-02-20)
+- GitHub repo conectat: `https://github.com/idealfit/gsm-relay`
+- CI iOS existent si functional ca pipeline, dar ultimul run a esuat pe o eroare Swift parser in `AppViewModel.swift` (linia `nextFreeKnownSlot`).
+- Fix local pregatit: optional chaining rescris explicit (`let slot ...; return slot?.id`) pentru Xcode 16.4.
+- Primul pas in urmatoarea sesiune:
+  1. confirm push la ultimul fix iOS,
+  2. rerun `iOS Client Build`,
+  3. daca build verde, trecere pe testare UAT Android vs iOS.
+
+## Git discipline (important)
+- Nu folosi `git add .` in acest repo (sunt multe foldere locale/untracked).
+- Foloseste add selectiv doar pentru fisierele vizate (ex: `ios-client`, `.github/workflows`, `status.md`, `relay_project.md`).
+
+## Sesiune curenta - sync hardening (2026-02-20)
+
+### Ce s-a fixat (esential)
+- S-a stabilizat sincronizarea intre:
+  - Windows UI (vizualizare setup + coada),
+  - Android Client (coada/snapshot),
+  - Android Gateway (executie SMS + confirmari).
+- Principiu impus: SMS-ul este confirmarea reala de executie; serverul este adevarul comun pentru statusurile cozii.
+
+### Schimbari tehnice aplicate
+- `server-firebase/index.js`
+  - `/api/commands`:
+    - `pending` rulat ASC (executor),
+    - celelalte statusuri livrate DESC (UI vede ultimele comenzi),
+    - limit pentru UI extins (pana la 1000).
+  - `/api/commands/ack-relay` foloseste si `gatewayId`.
+- `windows-ui/GSMRelayDesktop/ViewModels/MainViewModel.cs`
+  - poll la 10s,
+  - incarcare 1000 comenzi pentru setup/coada locatie.
+- `android/app/src/main/java/com/security/gsmrelay/data/network/ServerApi.kt`
+  - fetch commands pana la 1000,
+  - ACK trimite `gatewayId`.
+- `android/app/src/main/java/com/security/gsmrelay/sms/SmsReceiver.kt`
+  - ACK se trimite chiar daca releul nu este in cache local (fallback `fromNumber`).
+- `android/app/src/main/java/com/security/gsmrelay/service/CommandPollService.kt`
+  - guard anti-duplicate pe `commandId`,
+  - retry update status catre server (3 incercari),
+  - recovery pentru comenzi in-flight:
+    - verifica marker SMS,
+    - inchide comanda `done` la confirmare,
+    - retry controlat daca lipseste confirmarea.
+
+### Caz real inchis: `0731373297`
+- Problema: retransmitere continua desi setup-ul parea finalizat.
+- Root cause: comenzi legacy `sent` ramase in coada.
+- Fix:
+  - recovery pe `sent` restrictionat la setup + fereastra recenta,
+  - cleanup punctual facut pe DB local: `sent` vechi -> `failed` pentru releul afectat.
+
+### Builduri/artefacte validate
+- Android client + gateway: build OK.
+- Windows desktop: build OK.
+- Copii in root (gata de instalare/rulare):
+  - `GSMRelayGateway-debug.apk`
+  - `GSMRelayClient-debug.apk`
+  - `GSMRelayDesktop.lnk` (target pe ultimul `GSMRelayDesktop.exe` din Debug)
+
+### Regula operationala setata
+- Dupa fiecare build:
+  - Android: copie automata `.apk` in root proiect.
+  - Windows: update shortcut `.lnk` la ultimul exe build-uit.
+
+### Checklist maine (scurt)
+1. Deploy/restart server `server-firebase`.
+2. Instaleaza pe telefon gateway ultimul `GSMRelayGateway-debug.apk`.
+3. Verifica la onboarding multiplu:
+   - tranzitii corecte `pending -> sent_waiting -> done`,
+   - fara retransmitere infinita,
+   - setup card in Windows se inchide la toti pasii.
+

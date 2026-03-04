@@ -1,0 +1,317 @@
+<Application x:Class="GSMRelayDesktop.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+  <Application.Resources>
+    <ResourceDictionary>
+      <Color x:Key="PrimaryColor">#0B6EA8</Color>
+      <Color x:Key="PrimaryHoverColor">#095F8F</Color>
+      <Color x:Key="PrimaryPressedColor">#074E75</Color>
+      <Color x:Key="ButtonColor">#1A2D52</Color>
+      <Color x:Key="ButtonHoverColor">#2158CC</Color>
+      <Color x:Key="ButtonPressedColor">#1B43A0</Color>
+      <Color x:Key="ButtonShadowColor">#3A071B49</Color>
+      <Color x:Key="ButtonDisabledColor">#BFD9E8</Color>
+      <Color x:Key="ButtonTextColor">#FFFFFF</Color>
+      <Color x:Key="ButtonFocusRingColor">#58C6FF</Color>
+      <Color x:Key="ButtonGlowColor">#3F2B86FF</Color>
+      <Color x:Key="ButtonGlowHoverColor">#6F2EC5FF</Color>
+      <Color x:Key="ButtonOutlineTextColor">#0B6EA8</Color>
+      <Color x:Key="DangerButtonColor">#D64545</Color>
+      <Color x:Key="DangerButtonHoverColor">#C63737</Color>
+      <Color x:Key="DangerButtonPressedColor">#AA2C2C</Color>
+      <Color x:Key="DangerButtonGlowColor">#66FF5A5A</Color>
+      <Color x:Key="DangerButtonGlowHoverColor">#9BFF4B4B</Color>
+      <Color x:Key="SurfaceColor">#F4F7FA</Color>
+      <Color x:Key="BorderColor">#D5DEE7</Color>
+      <Color x:Key="TextPrimaryColor">#1D2A35</Color>
+      <Color x:Key="TextSecondaryColor">#5A6B7B</Color>
+
+      <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource PrimaryColor}" />
+      <SolidColorBrush x:Key="PrimaryHoverBrush" Color="{StaticResource PrimaryHoverColor}" />
+      <SolidColorBrush x:Key="PrimaryPressedBrush" Color="{StaticResource PrimaryPressedColor}" />
+      <SolidColorBrush x:Key="ButtonBrush" Color="{StaticResource ButtonColor}" />
+      <SolidColorBrush x:Key="ButtonHoverBrush" Color="{StaticResource ButtonHoverColor}" />
+      <SolidColorBrush x:Key="ButtonPressedBrush" Color="{StaticResource ButtonPressedColor}" />
+      <SolidColorBrush x:Key="ButtonShadowBrush" Color="{StaticResource ButtonShadowColor}" />
+      <SolidColorBrush x:Key="ButtonDisabledBrush" Color="{StaticResource ButtonDisabledColor}" />
+      <SolidColorBrush x:Key="ButtonTextBrush" Color="{StaticResource ButtonTextColor}" />
+      <SolidColorBrush x:Key="ButtonFocusRingBrush" Color="{StaticResource ButtonFocusRingColor}" />
+      <SolidColorBrush x:Key="ButtonGlowBrush" Color="{StaticResource ButtonGlowColor}" />
+      <SolidColorBrush x:Key="ButtonGlowHoverBrush" Color="{StaticResource ButtonGlowHoverColor}" />
+      <SolidColorBrush x:Key="ButtonOutlineTextBrush" Color="{StaticResource ButtonOutlineTextColor}" />
+      <SolidColorBrush x:Key="DangerButtonBrush" Color="{StaticResource DangerButtonColor}" />
+      <SolidColorBrush x:Key="DangerButtonHoverBrush" Color="{StaticResource DangerButtonHoverColor}" />
+      <SolidColorBrush x:Key="DangerButtonPressedBrush" Color="{StaticResource DangerButtonPressedColor}" />
+      <SolidColorBrush x:Key="DangerButtonGlowBrush" Color="{StaticResource DangerButtonGlowColor}" />
+      <SolidColorBrush x:Key="DangerButtonGlowHoverBrush" Color="{StaticResource DangerButtonGlowHoverColor}" />
+      <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" />
+      <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}" />
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}" />
+
+      <Style TargetType="Window">
+        <Setter Property="FontFamily" Value="Segoe UI" />
+        <Setter Property="TextElement.Foreground" Value="{StaticResource TextPrimaryBrush}" />
+      </Style>
+
+      <Style TargetType="TextBox">
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="White" />
+      </Style>
+
+      <Style TargetType="ComboBox">
+        <Setter Property="Padding" Value="6,4" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="White" />
+      </Style>
+
+      <Style TargetType="ListBox">
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="White" />
+        <Setter Property="Padding" Value="2" />
+      </Style>
+
+      <Style TargetType="TabControl">
+        <Setter Property="Background" Value="White" />
+      </Style>
+
+      <Style TargetType="DataGrid">
+        <Setter Property="GridLinesVisibility" Value="Horizontal" />
+        <Setter Property="HeadersVisibility" Value="Column" />
+        <Setter Property="CanUserSortColumns" Value="True" />
+        <Setter Property="CanUserReorderColumns" Value="False" />
+        <Setter Property="CanUserResizeRows" Value="False" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+      </Style>
+
+      <Style TargetType="DataGridColumnHeader">
+        <Setter Property="Background" Value="#ECF3F8" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      </Style>
+
+      <Style TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource ButtonBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource ButtonTextBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ButtonBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="14,8" />
+        <Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="MinWidth" Value="84" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="Button">
+              <Grid>
+                <Border x:Name="focusRing"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                        BorderThickness="2"
+                        CornerRadius="10"
+                        Margin="-3" />
+                <Grid x:Name="contentRoot" RenderTransformOrigin="0.5,0.5">
+                  <Grid.RenderTransform>
+                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                  </Grid.RenderTransform>
+                  <Border x:Name="glowBorder"
+                          Background="Transparent"
+                          BorderBrush="{StaticResource ButtonGlowBrush}"
+                          BorderThickness="1.3"
+                          CornerRadius="11"
+                          Opacity="0.45">
+                    <Border.Effect>
+                      <DropShadowEffect Color="#2E7DFF"
+                                        BlurRadius="14"
+                                        ShadowDepth="0"
+                                        Opacity="0.55" />
+                    </Border.Effect>
+                  </Border>
+
+                  <Border x:Name="shadow"
+                          Background="{StaticResource ButtonShadowBrush}"
+                          CornerRadius="9"
+                          Margin="0,2,0,0"
+                          Opacity="0.30" />
+
+                  <Border x:Name="border"
+                          Background="{TemplateBinding Background}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          CornerRadius="9"
+                          SnapsToDevicePixels="True">
+                    <ContentPresenter HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      TextElement.Foreground="{TemplateBinding Foreground}"
+                                      RecognizesAccessKey="True" />
+                  </Border>
+                </Grid>
+              </Grid>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="border" Property="Background" Value="{StaticResource ButtonHoverBrush}" />
+                  <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource ButtonHoverBrush}" />
+                  <Setter TargetName="glowBorder" Property="BorderBrush" Value="{StaticResource ButtonGlowHoverBrush}" />
+                  <Setter TargetName="glowBorder" Property="Opacity" Value="0.90" />
+                  <Setter TargetName="shadow" Property="Opacity" Value="0.34" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                  <Setter TargetName="border" Property="Background" Value="{StaticResource ButtonPressedBrush}" />
+                  <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource ButtonPressedBrush}" />
+                  <Setter TargetName="glowBorder" Property="Opacity" Value="0.75" />
+                  <Setter TargetName="shadow" Property="Opacity" Value="0.18" />
+                  <Setter TargetName="shadow" Property="Margin" Value="0,1,0,0" />
+                  <Setter TargetName="contentRoot" Property="RenderTransform">
+                    <Setter.Value>
+                      <ScaleTransform ScaleX="0.96" ScaleY="0.96" />
+                    </Setter.Value>
+                  </Setter>
+                </Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                  <Setter TargetName="focusRing" Property="BorderBrush" Value="{StaticResource ButtonFocusRingBrush}" />
+                  <Setter TargetName="glowBorder" Property="Opacity" Value="1" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter TargetName="border" Property="Background" Value="{StaticResource ButtonDisabledBrush}" />
+                  <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource ButtonDisabledBrush}" />
+                  <Setter TargetName="glowBorder" Property="Opacity" Value="0" />
+                  <Setter TargetName="shadow" Property="Opacity" Value="0" />
+                  <Setter Property="Foreground" Value="#1E2A38" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+      </Style>
+
+      <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Background" Value="White" />
+        <Setter Property="Foreground" Value="#111111" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      </Style>
+
+      <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Background" Value="{StaticResource DangerButtonBrush}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderBrush" Value="{StaticResource DangerButtonBrush}" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="Button">
+              <Grid>
+                <Border x:Name="focusRing"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                        BorderThickness="2"
+                        CornerRadius="10"
+                        Margin="-3" />
+                <Grid x:Name="contentRoot" RenderTransformOrigin="0.5,0.5">
+                  <Grid.RenderTransform>
+                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                  </Grid.RenderTransform>
+                  <Border x:Name="glowBorder"
+                          Background="Transparent"
+                          BorderBrush="{StaticResource DangerButtonGlowBrush}"
+                          BorderThickness="1.3"
+                          CornerRadius="11"
+                          Opacity="0.45">
+                    <Border.Effect>
+                      <DropShadowEffect Color="#D83A3A"
+                                        BlurRadius="14"
+                                        ShadowDepth="0"
+                                        Opacity="0.60" />
+                    </Border.Effect>
+                  </Border>
+
+                  <Border x:Name="shadow"
+                          Background="{StaticResource ButtonShadowBrush}"
+                          CornerRadius="9"
+                          Margin="0,2,0,0"
+                          Opacity="0.30" />
+
+                  <Border x:Name="border"
+                          Background="{TemplateBinding Background}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          CornerRadius="9"
+                          SnapsToDevicePixels="True">
+                    <ContentPresenter HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      TextElement.Foreground="{TemplateBinding Foreground}"
+                                      RecognizesAccessKey="True" />
+                  </Border>
+                </Grid>
+              </Grid>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="border" Property="Background" Value="{StaticResource DangerButtonHoverBrush}" />
+                  <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource DangerButtonHoverBrush}" />
+                  <Setter TargetName="glowBorder" Property="BorderBrush" Value="{StaticResource DangerButtonGlowHoverBrush}" />
+                  <Setter TargetName="glowBorder" Property="Opacity" Value="0.95" />
+                  <Setter TargetName="shadow" Property="Opacity" Value="0.34" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                  <Setter TargetName="border" Property="Background" Value="{StaticResource DangerButtonPressedBrush}" />
+                  <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource DangerButtonPressedBrush}" />
+                  <Setter TargetName="glowBorder" Property="Opacity" Value="0.78" />
+                  <Setter TargetName="shadow" Property="Opacity" Value="0.18" />
+                  <Setter TargetName="shadow" Property="Margin" Value="0,1,0,0" />
+                  <Setter TargetName="contentRoot" Property="RenderTransform">
+                    <Setter.Value>
+                      <ScaleTransform ScaleX="0.96" ScaleY="0.96" />
+                    </Setter.Value>
+                  </Setter>
+                </Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                  <Setter TargetName="focusRing" Property="BorderBrush" Value="{StaticResource ButtonFocusRingBrush}" />
+                  <Setter TargetName="glowBorder" Property="Opacity" Value="1" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter TargetName="border" Property="Background" Value="{StaticResource ButtonDisabledBrush}" />
+                  <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource ButtonDisabledBrush}" />
+                  <Setter TargetName="glowBorder" Property="Opacity" Value="0" />
+                  <Setter TargetName="shadow" Property="Opacity" Value="0" />
+                  <Setter Property="Foreground" Value="#1E2A38" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <Style x:Key="SmallButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Padding" Value="10,5" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="MinWidth" Value="72" />
+        <Setter Property="FontSize" Value="12" />
+      </Style>
+
+      <Style x:Key="SmallSecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+        <Setter Property="Padding" Value="10,5" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="MinWidth" Value="72" />
+        <Setter Property="FontSize" Value="12" />
+      </Style>
+
+      <Style x:Key="SmallDangerButtonStyle" TargetType="Button" BasedOn="{StaticResource DangerButtonStyle}">
+        <Setter Property="Padding" Value="10,5" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="MinWidth" Value="72" />
+        <Setter Property="FontSize" Value="12" />
+      </Style>
+    </ResourceDictionary>
+  </Application.Resources>
+</Application>

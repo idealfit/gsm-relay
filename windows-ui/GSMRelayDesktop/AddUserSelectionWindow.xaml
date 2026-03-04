@@ -1,0 +1,46 @@
+<Window x:Class="GSMRelayDesktop.AddUserSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Adauga utilizator pe selectie"
+        Width="460"
+        MinHeight="330"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource SurfaceBrush}">
+  <Border Margin="12" Padding="12" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <TextBlock Grid.Row="0" Text="Utilizator pentru releele selectate" FontWeight="Bold" FontSize="16" Margin="0,0,0,12"/>
+
+      <StackPanel Grid.Row="1" Margin="0,0,0,8">
+        <TextBlock Text="Telefon" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+        <TextBox x:Name="PhoneTextBox" Margin="0,2,0,0"/>
+      </StackPanel>
+
+      <StackPanel Grid.Row="2" Margin="0,0,0,12">
+        <TextBlock Text="Nume (optional)" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+        <TextBox x:Name="NameTextBox" Margin="0,2,0,6"/>
+        <TextBlock Text="Grup" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+        <ComboBox x:Name="GroupComboBox" Margin="0,2,0,0">
+          <ComboBoxItem Content="general" IsSelected="True"/>
+          <ComboBoxItem Content="angajati"/>
+          <ComboBoxItem Content="vizitatori"/>
+          <ComboBoxItem Content="management"/>
+          <ComboBoxItem Content="mentenanta"/>
+        </ComboBox>
+      </StackPanel>
+
+      <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+        <Button Content="Anuleaza" Click="Cancel_Click" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0" Padding="12,6"/>
+        <Button Content="Adauga" Click="Save_Click" Padding="12,6"/>
+      </StackPanel>
+    </Grid>
+  </Border>
+</Window>

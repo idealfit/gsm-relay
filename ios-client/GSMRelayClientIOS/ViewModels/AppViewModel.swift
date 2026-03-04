@@ -1,5 +1,15 @@
 import Foundation
 
+struct RelaySetupOptions {
+    var forcePasswordReset: Bool = true
+    var setDateTime: Bool = true
+    var setMaster: Bool = true
+    var setConfirmOn: Bool = true
+    var setConfirmOff: Bool = true
+    var queryUsers: Bool = true
+    var autoAddAdmins: Bool = true
+}
+
 @MainActor
 final class AppViewModel: ObservableObject {
     @Published var config: ServerConfig
@@ -104,7 +114,7 @@ final class AppViewModel: ObservableObject {
             refreshLocationsState()
             restoreSelections()
 
-            let items = try await api.fetchCommands(config: config, status: "", limit: 200)
+            let items = try await api.fetchCommands(config: config, status: "", limit: maxRelayChannels)
             commands = items.sorted { $0.createdAt > $1.createdAt }
 
             statusMessage = "Synced: \(relays.count) relays, \(commands.count) commands"
@@ -117,7 +127,7 @@ final class AppViewModel: ObservableObject {
     func syncCommands() async {
         guard config.isValid else { return }
         do {
-            let items = try await api.fetchCommands(config: config, status: "", limit: 200)
+            let items = try await api.fetchCommands(config: config, status: "", limit: maxRelayChannels)
             commands = items.sorted { $0.createdAt > $1.createdAt }
         } catch {
             addNotification("Command queue load failed", type: "error")
@@ -208,14 +218,22 @@ final class AppViewModel: ObservableObject {
 
     // MARK: - Relays
 
-    func addRelay(name: String, phone: String, password: String, location: String) {
+    func addRelay(
+        name: String,
+        phone: String,
+        password: String,
+        location: String,
+        queryStart: Int = 1,
+        queryEnd: Int = 999,
+        setupOptions: RelaySetupOptions = RelaySetupOptions()
+    ) {
         let relay = Relay(
             id: nowMs(),
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             phoneNumber: phone.trimmingCharacters(in: .whitespacesAndNewlines),
             password: password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "2005" : password.trimmingCharacters(in: .whitespacesAndNewlines),
             location: location.trimmingCharacters(in: .whitespacesAndNewlines),
-            users: (1...200).map { idx in RelayUser(id: idx, phone: "", name: "", group: "general", addedDate: nil, known: false) },
+            users: (1...maxRelayChannels).map { idx in RelayUser(id: idx, phone: "", name: "", group: "general", addedDate: nil, known: false) },
             lastSync: nowMs(),
             cloudBackup: false
         )
@@ -223,7 +241,79 @@ final class AppViewModel: ObservableObject {
         relays.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
         refreshLocationsState()
         selectRelay(relay)
-        Task { await uploadSnapshotNow() }
+        Task {
+            await uploadSnapshotNow()
+            await queueInitialSetupCommands(for: relay, queryStart: queryStart, queryEnd: queryEnd, options: setupOptions)
+        }
+    }
+
+    private func queueInitialSetupCommands(for relay: Relay, queryStart: Int, queryEnd: Int, options: RelaySetupOptions) async {
+        guard config.isValid else { return }
+        guard !config.gatewayId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            addNotification("Gateway ID lipsa pentru onboarding", type: "error", relay: relay)
+            return
+        }
+
+        let safeStart = min(max(queryStart, 1), maxRelayChannels)
+        let safeEnd = min(max(queryEnd, 1), maxRelayChannels)
+        let normalizedStart = min(safeStart, safeEnd)
+        let normalizedEnd = max(safeStart, safeEnd)
+        let setupPassword = options.forcePasswordReset ? "2005" : relay.password
+        let timeStamp = Self.setupTimeFormatter.string(from: Date())
+
+        var steps: [(command: String, description: String, source: String)] = []
+        if options.forcePasswordReset {
+            steps.append(("1234P2005", "Setare parola standard 2005", "ios_setup"))
+        }
+        if options.setDateTime {
+            steps.append(("\(setupPassword)T\(timeStamp)", "Setare data/ora \(timeStamp)", "ios_setup"))
+        }
+        if options.setMaster {
+            let master = config.masterPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !master.isEmpty {
+                steps.append(("\(setupPassword)A001#\(master)#", "Setare master 001", "ios_setup"))
+            }
+        }
+        if options.setConfirmOn {
+            steps.append(("\(setupPassword)GON10#RIDICARE/DESCHIDERE#", "Setare confirmare deschidere", "ios_setup"))
+        }
+        if options.setConfirmOff {
+            steps.append(("\(setupPassword)GOFF##", "Anulare confirmare inchidere", "ios_setup"))
+        }
+        if options.queryUsers {
+            let source = options.autoAddAdmins ? "ios_setup" : "ios_no_auto_admin"
+            steps.append((
+                "\(setupPassword)AL\(String(format: "%03d", normalizedStart))#\(String(format: "%03d", normalizedEnd))#",
+                "Interogare utilizatori \(normalizedStart)-\(normalizedEnd)",
+                source
+            ))
+        }
+
+        var queued = 0
+        var failed = 0
+        for step in steps {
+            let result = await api.createCommand(
+                config: config,
+                relayPhone: relay.phoneNumber,
+                command: step.command,
+                description: step.description,
+                source: step.source
+            )
+            if result.ok {
+                queued += 1
+                addHistory(relay: relay, command: step.command, description: step.description, status: "queued")
+            } else {
+                failed += 1
+            }
+        }
+
+        if queued > 0 {
+            addNotification("Onboarding in coada: \(queued) comenzi", type: failed == 0 ? "success" : "info", relay: relay)
+            await syncCommands()
+        }
+        if failed > 0 {
+            addNotification("Onboarding: \(failed) comenzi esuate", type: "error", relay: relay)
+        }
     }
 
     func updateRelay(_ relayId: Int64, name: String, phone: String, password: String, location: String) {
@@ -338,8 +428,8 @@ final class AppViewModel: ObservableObject {
     // MARK: - Relay commands
 
     func queryUsers(_ relay: Relay, start: Int, end: Int) async {
-        let safeStart = min(max(start, 1), 200)
-        let safeEnd = min(max(end, 1), 200)
+        let safeStart = min(max(start, 1), maxRelayChannels)
+        let safeEnd = min(max(end, 1), maxRelayChannels)
         if safeStart > safeEnd {
             addNotification("Invalid range for query", type: "error", relay: relay)
             return
@@ -558,7 +648,7 @@ final class AppViewModel: ObservableObject {
         relays.map { relay in
             var byId: [Int: RelayUser] = [:]
             (relay.users ?? []).forEach { byId[$0.id] = $0 }
-            let full = (1...200).map { id in
+            let full = (1...maxRelayChannels).map { id in
                 byId[id] ?? RelayUser(id: id, phone: "", name: "", group: "general", addedDate: nil, known: false)
             }
             return relay.with(users: full)
@@ -670,7 +760,7 @@ final class AppViewModel: ObservableObject {
             if targetId <= 0 {
                 targetId = nextFreeKnownSlot(in: relay) ?? 0
             }
-            if targetId <= 0 || targetId > 200 {
+            if targetId <= 0 || targetId > maxRelayChannels {
                 errors += 1
                 continue
             }
@@ -759,6 +849,15 @@ final class AppViewModel: ObservableObject {
         }
         return row[safe: fallbackIndex] ?? ""
     }
+}
+
+private extension AppViewModel {
+    var maxRelayChannels: Int { 999 }
+    static let setupTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "ddMMyyHHmm"
+        return formatter
+    }()
 }
 
 private extension Array where Element == String {

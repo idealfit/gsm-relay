@@ -23,8 +23,8 @@ final class APIClient {
         return snapshot
     }
 
-    func fetchCommands(config: ServerConfig, status: String = "", limit: Int = 200) async throws -> [CommandQueueItem] {
-        let safeLimit = min(max(limit, 1), 200)
+    func fetchCommands(config: ServerConfig, status: String = "", limit: Int = 999) async throws -> [CommandQueueItem] {
+        let safeLimit = min(max(limit, 1), 999)
         var queryItems = [
             URLQueryItem(name: "status", value: status),
             URLQueryItem(name: "limit", value: String(safeLimit))
