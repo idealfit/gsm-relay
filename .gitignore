@@ -1,14 +1,26 @@
 ﻿# OS / IDE
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
 
 # Local tooling/cache
 .dotnet/
 .gradle/
 _backup_tmp/
+.android-local/
+.gradle-user/
+.nuget/
+_dist/
+*.zip
 
 # Android build artifacts
 android/.gradle/
+android/.gradle-home/
+android/.gradle-user/
+android/.gradle-user-temp/
+android/.idea/
+android/.kotlin/
 android/app/build/
 android/build/
 
@@ -18,7 +30,24 @@ windows-ui/**/obj/
 
 # Node deps/artifacts
 server-firebase/node_modules/
+server-firebase/.env
+server-firebase/data/
+server-firebase/*.db
+server-firebase/*.db-shm
+server-firebase/*.db-wal
 
 # Local generated artifacts
 *.apk
 *.lnk
+*.pdb
+*.db
+*.db-shm
+*.db-wal
+credentiale.txt
+android/gsm-relay-*-firebase-adminsdk-*.json
+
+# Local one-off files
+index.js
+db.js
+Captur*
+android/New Document text.txt
