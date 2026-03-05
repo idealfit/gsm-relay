@@ -41,6 +41,11 @@ data class CommandCreateResult(
     val statusCode: Int
 )
 
+data class RelayActionResult(
+    val ok: Boolean,
+    val statusCode: Int
+)
+
 object ServerApi {
     private val gson = Gson()
 
@@ -237,6 +242,49 @@ object ServerApi {
             CommandCreateResult(code in 200..299, code)
         } catch (_: Exception) {
             CommandCreateResult(false, 0)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    fun deleteRelayData(config: ServerConfig, relayPhone: String): RelayActionResult {
+        val phone = relayPhone.trim()
+        if (phone.isBlank()) return RelayActionResult(false, 400)
+        val url = buildUrl(config.baseUrl, "/api/relays/${java.net.URLEncoder.encode(phone, "UTF-8")}")
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "DELETE"
+            connectTimeout = 8000
+            readTimeout = 8000
+            setRequestProperty("Authorization", buildAuth(config))
+        }
+        return try {
+            val code = conn.responseCode
+            RelayActionResult(code in 200..299, code)
+        } catch (_: Exception) {
+            RelayActionResult(false, 0)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    fun clearRelayDatabase(config: ServerConfig, relayPhone: String): RelayActionResult {
+        val phone = relayPhone.trim()
+        if (phone.isBlank()) return RelayActionResult(false, 400)
+        val url = buildUrl(config.baseUrl, "/api/relays/${java.net.URLEncoder.encode(phone, "UTF-8")}/clear-db")
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 8000
+            readTimeout = 8000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Authorization", buildAuth(config))
+        }
+        return try {
+            conn.outputStream.use { it.write("{}".toByteArray()) }
+            val code = conn.responseCode
+            RelayActionResult(code in 200..299, code)
+        } catch (_: Exception) {
+            RelayActionResult(false, 0)
         } finally {
             conn.disconnect()
         }

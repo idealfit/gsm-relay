@@ -365,20 +365,54 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val relaysToDelete = _relays.value.filter { relay ->
             normalizeLocationLabel(relay.location).equals(source, ignoreCase = true)
         }
-        if (relaysToDelete.isNotEmpty()) {
-            deleteRelaysAndAssociatedData(relaysToDelete)
+        if (relaysToDelete.isEmpty()) {
+            explicitLocations = explicitLocations
+                .filterNot { it.equals(source, ignoreCase = true) }
+                .distinctBy { it.lowercase() }
+                .sortedBy { it.lowercase() }
+            refreshLocationsState(relays = _relays.value)
+            scheduleUpload()
+            addNotification("Locatie \"$source\" stearsa", "info")
+            return true
         }
-        explicitLocations = explicitLocations
-            .filterNot { it.equals(source, ignoreCase = true) }
-            .distinctBy { it.lowercase() }
-            .sortedBy { it.lowercase() }
-        refreshLocationsState(relays = _relays.value)
-        scheduleUpload()
-        addNotification(
-            "Locatie \"$source\" stearsa" +
-                if (relaysToDelete.isNotEmpty()) " impreuna cu ${relaysToDelete.size} relee si datele lor" else "",
-            "info"
-        )
+
+        val config = _serverConfig.value
+        if (!config.isValid()) {
+            addNotification("Setari server incomplete. Stergerea definitiva a locatiei a fost anulata.", "error")
+            return false
+        }
+
+        viewModelScope.launch {
+            val deletedRelays = withContext(Dispatchers.IO) {
+                relaysToDelete.filter { relay ->
+                    ServerApi.deleteRelayData(config, relay.phoneNumber).ok
+                }
+            }
+
+            if (deletedRelays.isNotEmpty()) {
+                removeRelaysAndAssociatedDataLocally(deletedRelays)
+            }
+
+            val failed = relaysToDelete.size - deletedRelays.size
+            if (failed == 0) {
+                explicitLocations = explicitLocations
+                    .filterNot { it.equals(source, ignoreCase = true) }
+                    .distinctBy { it.lowercase() }
+                    .sortedBy { it.lowercase() }
+                refreshLocationsState(relays = _relays.value)
+                scheduleUpload()
+                addNotification(
+                    "Locatie \"$source\" stearsa impreuna cu ${deletedRelays.size} relee si datele lor",
+                    "info"
+                )
+            } else {
+                addNotification(
+                    "Stergere locatie partiala: ${deletedRelays.size} relee sterse, $failed esuate",
+                    "error"
+                )
+            }
+            syncCommands(showNotifications = false)
+        }
         return true
     }
 
@@ -401,8 +435,87 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteRelay(id: Long) {
         val relay = _relays.value.firstOrNull { it.id == id } ?: return
-        deleteRelaysAndAssociatedData(listOf(relay))
-        addNotification("Releu \"${relay.name}\" sters", "info")
+        val config = _serverConfig.value
+        if (!config.isValid()) {
+            addNotification("Setari server incomplete. Stergerea definitiva a releului a fost anulata.", "error", relay)
+            return
+        }
+
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                ServerApi.deleteRelayData(config, relay.phoneNumber)
+            }
+            if (!result.ok) {
+                val message = if (result.statusCode == 404) {
+                    "Serverul nu are /api/relays/{relayPhone}. Actualizeaza serverul."
+                } else {
+                    "Stergere releu respinsa (HTTP ${result.statusCode})"
+                }
+                addNotification(message, "error", relay)
+                return@launch
+            }
+
+            removeRelaysAndAssociatedDataLocally(listOf(relay))
+            addNotification("Releu \"${relay.name}\" sters definitiv", "info")
+            syncCommands(showNotifications = false)
+        }
+    }
+
+    fun clearSelectedRelayDatabase() {
+        val relay = _selectedRelay.value ?: return
+        val config = _serverConfig.value
+        if (!config.isValid()) {
+            addNotification("Setari server incomplete", "error", relay)
+            return
+        }
+
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                ServerApi.clearRelayDatabase(config, relay.phoneNumber)
+            }
+            if (!result.ok) {
+                val message = if (result.statusCode == 404) {
+                    "Serverul nu are /api/relays/{relayPhone}/clear-db. Actualizeaza serverul."
+                } else {
+                    "Stergere baza releu respinsa (HTTP ${result.statusCode})"
+                }
+                addNotification(message, "error", relay)
+                return@launch
+            }
+
+            val now = System.currentTimeMillis()
+            val refreshedRelay = (_relays.value.firstOrNull { it.id == relay.id } ?: relay).copy(
+                users = relay.users.map { user ->
+                    user.copy(
+                        phone = "",
+                        name = "",
+                        group = "general",
+                        addedDate = null,
+                        known = false
+                    )
+                },
+                lastSync = now
+            )
+            val updatedHistory = _history.value.filterNot { item ->
+                sameRelayPhone(item.relayPhone, relay.phoneNumber)
+            }
+            val updatedEvents = _events.value.filterNot { item ->
+                sameRelayPhone(item.relayPhone, relay.phoneNumber)
+            }
+            val updatedNotifications = _notifications.value.filterNot { item ->
+                sameRelayPhone(item.relayPhone, relay.phoneNumber)
+            }
+
+            updateRelay(refreshedRelay)
+            saveHistory(updatedHistory)
+            saveEvents(updatedEvents)
+            saveNotifications(updatedNotifications)
+            _commands.value = _commands.value.filterNot { item ->
+                sameRelayPhone(item.relayPhone, relay.phoneNumber)
+            }
+            addNotification("Baza releului a fost stearsa complet", "info", refreshedRelay)
+            syncCommands(showNotifications = false)
+        }
     }
 
     fun addUser(userId: Int, phone: String, name: String, group: String): Boolean {
@@ -1301,7 +1414,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return location?.trim().orEmpty().ifBlank { "Fara locatie" }
     }
 
-    private fun deleteRelaysAndAssociatedData(relaysToDelete: List<Relay>) {
+    private fun removeRelaysAndAssociatedDataLocally(relaysToDelete: List<Relay>) {
         if (relaysToDelete.isEmpty()) return
         val relayIds = relaysToDelete.map { it.id }.toSet()
         val relayPhones = relaysToDelete.map { it.phoneNumber }
@@ -1319,6 +1432,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         saveHistory(updatedHistory)
         saveEvents(updatedEvents)
         saveNotifications(updatedNotifications)
+        _commands.value = _commands.value.filterNot { item ->
+            relayPhones.any { phone -> sameRelayPhone(item.relayPhone, phone) }
+        }
         if (_selectedRelay.value?.id in relayIds) {
             _selectedRelay.value = null
         }

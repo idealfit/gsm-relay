@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -35,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -312,6 +314,7 @@ private fun RelayCommandsTab(viewModel: AppViewModel) {
     var showQuery by remember { mutableStateOf(false) }
     var showChangePassword by remember { mutableStateOf(false) }
     var showTimer by remember { mutableStateOf(false) }
+    var showClearDbConfirm by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -347,6 +350,9 @@ private fun RelayCommandsTab(viewModel: AppViewModel) {
                 Text("AUT")
             }
         }
+        Button(onClick = { showClearDbConfirm = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Sterge baza releu")
+        }
     }
 
     if (showQuery) {
@@ -375,6 +381,27 @@ private fun RelayCommandsTab(viewModel: AppViewModel) {
             onSave = { seconds ->
                 viewModel.setRelayTimer(seconds)
                 showTimer = false
+            }
+        )
+    }
+
+    if (showClearDbConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearDbConfirm = false },
+            title = { Text("Sterge baza releu") },
+            text = { Text("Stergi din baza toate datele releului selectat (utilizatori, coada, istoric, evenimente)?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearDbConfirm = false
+                    viewModel.clearSelectedRelayDatabase()
+                }) {
+                    Text("Sterge")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDbConfirm = false }) {
+                    Text("Anuleaza")
+                }
             }
         )
     }

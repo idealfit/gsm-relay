@@ -122,6 +122,25 @@ public class ApiClient
         };
     }
 
+    public async Task<RelayDeleteResult> ClearRelayDatabaseAsync(ServerConfig config, string relayPhone)
+    {
+        var phone = relayPhone?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            return new RelayDeleteResult { Ok = false, StatusCode = 400 };
+        }
+
+        var request = new HttpRequestMessage(HttpMethod.Post, BuildUrl(config.BaseUrl, $"/api/relays/{Uri.EscapeDataString(phone)}/clear-db"));
+        ApplyAuth(request, config);
+        request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+        using var response = await _httpClient.SendAsync(request);
+        return new RelayDeleteResult
+        {
+            Ok = response.IsSuccessStatusCode,
+            StatusCode = (int)response.StatusCode
+        };
+    }
+
     private static string BuildUrl(string baseUrl, string path)
     {
         var clean = baseUrl.EndsWith("/") ? baseUrl[..^1] : baseUrl;

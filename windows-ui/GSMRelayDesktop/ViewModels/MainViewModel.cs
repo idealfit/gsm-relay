@@ -1357,42 +1357,30 @@ public class MainViewModel : INotifyPropertyChanged
         );
         if (confirm != MessageBoxResult.Yes) return;
 
+        var clearResult = await _apiClient.ClearRelayDatabaseAsync(ServerConfig, relay.PhoneNumber);
+        if (!clearResult.Ok)
+        {
+            StatusMessage = clearResult.StatusCode == 404
+                ? "Serverul nu are endpoint-ul de stergere baza releu (actualizeaza serverul)"
+                : $"Stergere baza respinsa (HTTP {clearResult.StatusCode})";
+            var details = clearResult.StatusCode == 404
+                ? "Serverul nu are endpoint-ul /api/relays/{relayPhone}/clear-db. Actualizeaza serverul."
+                : $"Serverul a respins stergerea bazei releului (HTTP {clearResult.StatusCode}).";
+            ShowErrorPopup("Stergere baza esuata", details);
+            return;
+        }
+
         var updatedRelay = relay;
         foreach (var user in usersWithPhone)
         {
             updatedRelay = ApplyRelayUserUpdate(updatedRelay, user.Id, "", "", "general", false);
         }
 
+        RemoveRelayDataFromLocalCollections(relay.PhoneNumber);
         ApplyRelayUpdate(updatedRelay);
         await UploadSnapshotAsync();
-
-        var stoppedQueue = 0;
-        var failedQueueStops = 0;
-        foreach (var item in activeItems)
-        {
-            var ok = await _apiClient.UpdateCommandStatusAsync(
-                ServerConfig,
-                item.Id,
-                "failed",
-                "Sters din baza din desktop (fara comanda la releu)"
-            );
-            if (ok) stoppedQueue++;
-            else failedQueueStops++;
-        }
-
         await RefreshCommandsAsync(false);
-
-        if (failedQueueStops > 0)
-        {
-            StatusMessage = $"Stergere baza partiala: useri resetati, coada oprita {stoppedQueue}/{activeItems.Count}";
-            ShowErrorPopup(
-                "Stergere baza incompleta",
-                $"Nu s-au putut opri {failedQueueStops} comenzi active din coada."
-            );
-            return;
-        }
-
-        StatusMessage = $"Stergere baza finalizata: {usersWithPhone.Count} useri resetati, {stoppedQueue} comenzi active oprite";
+        StatusMessage = $"Stergere baza finalizata: {usersWithPhone.Count} useri resetati, date releu curatate complet";
     }
 
     private async Task ImportCsvAsync()
@@ -1410,68 +1398,91 @@ public class MainViewModel : INotifyPropertyChanged
         {
             var text = File.ReadAllText(dialog.FileName, Encoding.UTF8);
             var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length < 2)
+            if (lines.Length == 0)
             {
                 StatusMessage = "Fisier CSV gol sau fara continut util";
                 return;
             }
 
             var delimiter = DetectCsvDelimiter(lines[0]);
-            var headers = ParseCsvRow(lines[0], delimiter)
+            var firstRow = ParseCsvRow(lines[0], delimiter)
+                .Select(v => v.Trim())
+                .ToList();
+            var headers = firstRow
                 .Select(NormalizeCsvHeader)
                 .ToList();
+            var hasHeader = headers.Any(IsPhoneCsvHeader)
+                || headers.Any(h => h is "id" or "pozitie" or "canal" or "channel" or "nume" or "name" or "grup" or "group");
+            var firstDataRow = hasHeader ? 1 : 0;
+            if (lines.Length <= firstDataRow)
+            {
+                StatusMessage = "Fisier CSV gol sau fara continut util";
+                return;
+            }
+
             int ok = 0;
             int err = 0;
+            int skippedDuplicates = 0;
             var updatedRelay = relay;
+            NormalizeRelayUsers(updatedRelay);
             var errorDetails = new List<string>();
             await RefreshCommandsAsync(false);
             var reservedUserIds = GetReservedUserIdsForRelay(updatedRelay);
+            var existingPhoneKeys = new HashSet<string>(
+                updatedRelay.Users
+                    .Select(u => UserPhoneKey(u.Phone))
+                    .Where(k => !string.IsNullOrWhiteSpace(k)),
+                StringComparer.Ordinal
+            );
+            foreach (var key in GetReservedPhoneKeysForRelay(updatedRelay))
+            {
+                existingPhoneKeys.Add(key);
+            }
+            var importedPhoneKeys = new HashSet<string>(StringComparer.Ordinal);
 
-            for (var i = 1; i < lines.Length; i++)
+            for (var i = firstDataRow; i < lines.Length; i++)
             {
                 var values = ParseCsvRow(lines[i], delimiter)
                     .Select(v => v.Trim())
                     .ToList();
-                string? GetVal(string key)
+                var phone = ExtractPhoneFromImportRow(values, hasHeader ? headers : null);
+                var normalizedPhone = NormalizeImportedPhone(phone);
+                var phoneKey = UserPhoneKey(normalizedPhone);
+                if (string.IsNullOrWhiteSpace(phoneKey))
                 {
-                    var idx = headers.IndexOf(NormalizeCsvHeader(key));
-                    return idx >= 0 && idx < values.Count ? values[idx] : null;
+                    err++;
+                    errorDetails.Add($"Linia {i + 1}: telefon invalid");
+                    continue;
                 }
 
-                var idText = GetVal("id") ?? GetVal("pozitie");
-                var phone = GetVal("telefon") ?? GetVal("phone") ?? GetVal("numar");
-                if (!int.TryParse(idText, out var userId) || string.IsNullOrWhiteSpace(phone))
+                if (!importedPhoneKeys.Add(phoneKey) || existingPhoneKeys.Contains(phoneKey))
                 {
-                    err++;
-                    errorDetails.Add($"Linia {i + 1}: ID sau telefon invalid");
+                    skippedDuplicates++;
                     continue;
                 }
-                if (userId < 1 || userId > MaxRelayChannels)
+
+                var slot = FindNextFreeSlot(updatedRelay, reservedUserIds);
+                if (slot == null)
                 {
                     err++;
-                    errorDetails.Add($"Linia {i + 1}: ID in afara intervalului 1-{MaxRelayChannels}");
+                    errorDetails.Add($"Linia {i + 1}: nu mai exista pozitie libera in intervalul 1-{MaxRelayChannels}");
                     continue;
                 }
-                if (!IsSlotFreeForAssignment(updatedRelay, userId, reservedUserIds))
-                {
-                    err++;
-                    errorDetails.Add($"Linia {i + 1}: pozitia {userId} este ocupata sau rezervata in coada");
-                    continue;
-                }
-                var name = GetVal("nume") ?? GetVal("name") ?? "";
-                var group = GetVal("grup") ?? GetVal("group") ?? "general";
-                var command = $"{relay.Password}A{userId:000}#{phone}#";
+
+                var userId = slot.Id;
+                var command = $"{relay.Password}A{userId:000}#{normalizedPhone}#";
                 var sent = await SendCommandToRelayAsync(
                     updatedRelay,
                     command,
-                    $"Import CSV: {name} ({group})",
+                    $"Import CSV: {normalizedPhone}",
                     refreshCommands: false,
                     showErrorPopup: false
                 );
                 if (sent)
                 {
-                    updatedRelay = ApplyRelayUserUpdate(updatedRelay, userId, phone, name, group, true);
+                    updatedRelay = ApplyRelayUserUpdate(updatedRelay, userId, normalizedPhone, "", "general", true);
                     reservedUserIds.Add(userId);
+                    existingPhoneKeys.Add(phoneKey);
                     ok++;
                     await Task.Delay(400);
                 }
@@ -1488,7 +1499,7 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 var shortDetails = string.Join("; ", errorDetails.Take(3));
                 if (errorDetails.Count > 3) shortDetails += $" (+{errorDetails.Count - 3} alte erori)";
-                StatusMessage = $"Import CSV: {ok} in coada, {err} erori. {shortDetails}";
+                StatusMessage = $"Import CSV: {ok} in coada, {skippedDuplicates} duplicate sarite, {err} erori. {shortDetails}";
                 ShowErrorPopup(
                     "Eroare import CSV",
                     $"Importul a avut {err} erori:\n- {string.Join("\n- ", errorDetails)}"
@@ -1496,7 +1507,7 @@ public class MainViewModel : INotifyPropertyChanged
             }
             else
             {
-                StatusMessage = $"Import CSV: {ok} utilizatori adaugati cu succes in coada";
+                StatusMessage = $"Import CSV: {ok} utilizatori adaugati, {skippedDuplicates} duplicate sarite";
             }
         }
         catch (Exception ex)
@@ -1519,6 +1530,47 @@ public class MainViewModel : INotifyPropertyChanged
             .Trim()
             .TrimStart('\uFEFF')
             .ToLowerInvariant();
+    }
+
+    private static bool IsPhoneCsvHeader(string header)
+    {
+        return header is "telefon" or "phone" or "numar" or "numar_telefon" or "phone_number" or "telefon1" or "telefon2";
+    }
+
+    private static string ExtractPhoneFromImportRow(IReadOnlyList<string> values, IReadOnlyList<string>? headers)
+    {
+        if (values.Count == 0) return "";
+
+        if (headers != null && headers.Count > 0)
+        {
+            for (var i = 0; i < headers.Count && i < values.Count; i++)
+            {
+                if (IsPhoneCsvHeader(headers[i]) && !string.IsNullOrWhiteSpace(values[i]))
+                {
+                    return values[i];
+                }
+            }
+        }
+
+        foreach (var value in values)
+        {
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            var digits = new string(value.Where(char.IsDigit).ToArray());
+            if (digits.Length >= 6)
+            {
+                return value;
+            }
+        }
+
+        return values[0];
+    }
+
+    private static string NormalizeImportedPhone(string? phone)
+    {
+        var raw = (phone ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        var digits = new string(raw.Where(char.IsDigit).ToArray());
+        return digits.Length >= 6 ? digits : raw;
     }
 
     private static char DetectCsvDelimiter(string headerLine)
@@ -2002,9 +2054,33 @@ public class MainViewModel : INotifyPropertyChanged
         {
             if (!string.Equals(RelayPhoneKey(item.RelayPhone), relayKey, StringComparison.Ordinal)) continue;
             if (!IsActiveQueueStatus(item.Status)) continue;
-            if (!TryParseUserAssignmentCommand(item.Command, out var slotId, out var hasPhonePayload)) continue;
-            if (!hasPhonePayload) continue;
+            if (!TryParseUserAssignmentCommand(item.Command, out var slotId, out var phonePayload)) continue;
+            if (string.IsNullOrWhiteSpace(phonePayload)) continue;
             reserved.Add(slotId);
+        }
+
+        return reserved;
+    }
+
+    private HashSet<string> GetReservedPhoneKeysForRelay(Relay relay)
+    {
+        var relayKey = RelayPhoneKey(relay.PhoneNumber);
+        var reserved = new HashSet<string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(relayKey))
+        {
+            return reserved;
+        }
+
+        foreach (var item in Commands)
+        {
+            if (!string.Equals(RelayPhoneKey(item.RelayPhone), relayKey, StringComparison.Ordinal)) continue;
+            if (!IsActiveQueueStatus(item.Status)) continue;
+            if (!TryParseUserAssignmentCommand(item.Command, out _, out var phonePayload)) continue;
+            var key = UserPhoneKey(phonePayload);
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                reserved.Add(key);
+            }
         }
 
         return reserved;
@@ -2013,14 +2089,13 @@ public class MainViewModel : INotifyPropertyChanged
     private static bool IsActiveQueueStatus(string? status)
     {
         return string.Equals(status, "pending", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(status, "sent_waiting", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(status, "sent", StringComparison.OrdinalIgnoreCase);
+            || string.Equals(status, "sent_waiting", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool TryParseUserAssignmentCommand(string? command, out int userId, out bool hasPhonePayload)
+    private static bool TryParseUserAssignmentCommand(string? command, out int userId, out string phonePayload)
     {
         userId = 0;
-        hasPhonePayload = false;
+        phonePayload = "";
         if (string.IsNullOrWhiteSpace(command)) return false;
 
         var text = command.Trim();
@@ -2034,7 +2109,7 @@ public class MainViewModel : INotifyPropertyChanged
             var payloadStart = i + 5;
             var payloadEnd = text.IndexOf('#', payloadStart);
             if (payloadEnd < 0) return false;
-            hasPhonePayload = !string.IsNullOrWhiteSpace(text.Substring(payloadStart, payloadEnd - payloadStart));
+            phonePayload = text.Substring(payloadStart, payloadEnd - payloadStart).Trim();
             return true;
         }
 
@@ -2580,6 +2655,15 @@ public class MainViewModel : INotifyPropertyChanged
         if (aDigits.Length > 8) aDigits = aDigits[^8..];
         if (bDigits.Length > 8) bDigits = bDigits[^8..];
         return !string.IsNullOrWhiteSpace(aDigits) && aDigits == bDigits;
+    }
+
+    private static string UserPhoneKey(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return "";
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        if (digits.Length > 8) digits = digits[^8..];
+        if (!string.IsNullOrWhiteSpace(digits)) return digits;
+        return phone.Trim().ToLowerInvariant();
     }
 
     private void AddLog(string message)
