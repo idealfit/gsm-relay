@@ -21,6 +21,7 @@ android/.gradle-user/
 android/.gradle-user-temp/
 android/.idea/
 android/.kotlin/
+android/local.properties
 android/app/build/
 android/build/
 

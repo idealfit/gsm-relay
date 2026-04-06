@@ -183,13 +183,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun syncCommands(showNotifications: Boolean = true) {
+    fun syncCommands(
+        showNotifications: Boolean = true,
+        status: String = "",
+        limit: Int = 500
+    ) {
         val config = _serverConfig.value
         if (!config.isValid()) return
         viewModelScope.launch {
             try {
+                val safeStatus = status.ifBlank { "" }
+                val safeLimit = limit.coerceIn(1, 1000)
                 val items = withContext(Dispatchers.IO) {
-                    ServerApi.fetchCommands(config, "", 1000)
+                    ServerApi.fetchCommands(config, safeStatus, safeLimit)
                 }
                 _commands.value = items.sortedByDescending { it.createdAt }
             } catch (_: Exception) {
@@ -219,7 +225,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (showNotifications) {
                     addNotification("Sincronizare server reusita", "success")
                 }
-                syncCommands(showNotifications)
+                syncCommands(showNotifications, status = "pending", limit = PENDING_COMMAND_FETCH_LIMIT)
             } else if (showNotifications) {
                 addNotification("Sincronizare server esuata", "error")
             }
@@ -233,7 +239,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (autoSyncJob?.isActive == true) return
         autoSyncJob = viewModelScope.launch {
             while (true) {
-                delay(15_000)
+                delay(if (BuildConfig.IS_GATEWAY) 60_000L else AUTO_SYNC_INTERVAL_MS)
                 val config = _serverConfig.value
                 if (!config.isValid()) continue
                 performServerSync(config, showNotifications = false)
@@ -265,7 +271,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (!config.isValid()) return
         viewModelScope.launch {
             val ok = withContext(Dispatchers.IO) {
-                ServerApi.uploadSnapshot(config, ServerSnapshot(_relays.value, _history.value, _events.value, _locations.value))
+                ServerApi.uploadSnapshot(config, buildSnapshotForSync())
             }
             if (ok) {
                 addNotification("Upload server reusit", "success")
@@ -1551,9 +1557,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         uploadJob = viewModelScope.launch {
             delay(500)
             withContext(Dispatchers.IO) {
-                ServerApi.uploadSnapshot(config, ServerSnapshot(_relays.value, _history.value, _events.value, _locations.value))
+                ServerApi.uploadSnapshot(config, buildSnapshotForSync())
             }
         }
+    }
+
+    private fun buildSnapshotForSync(): ServerSnapshot {
+        return ServerSnapshot(
+            relays = _relays.value,
+            history = _history.value.take(SNAPSHOT_HISTORY_LIMIT),
+            events = _events.value.take(SNAPSHOT_EVENTS_LIMIT),
+            locations = _locations.value
+        )
     }
 
     private fun isLocalUrl(url: String): Boolean {
@@ -1574,6 +1589,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val MAX_RELAY_CHANNELS = 999
+        private const val AUTO_SYNC_INTERVAL_MS = 15_000L
+        private const val SNAPSHOT_HISTORY_LIMIT = 200
+        private const val SNAPSHOT_EVENTS_LIMIT = 200
+        private const val PENDING_COMMAND_FETCH_LIMIT = 100
 
         private val ADMIN_PHONES = listOf(
             "0739850968",

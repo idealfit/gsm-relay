@@ -94,6 +94,7 @@ fun GSMRelayManagerApp(viewModel: AppViewModel) {
     }
 
     LaunchedEffect(serverConfig) {
+        if (BuildConfig.IS_GATEWAY) return@LaunchedEffect
         if (!serverConfig.isValid()) return@LaunchedEffect
         while (true) {
             delay(60_000)

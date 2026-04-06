@@ -31,6 +31,7 @@ class CommandPollService : Service() {
     private var pollJob: Job? = null
     private val recentlySentCommands = mutableMapOf<String, Long>()
     private val processedSetupQueryCommands = mutableSetOf<String>()
+    private var consecutivePollFailures = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -56,138 +57,162 @@ class CommandPollService : Service() {
     private suspend fun pollLoop() {
         val repo = AppRepository(applicationContext)
         while (scope.isActive) {
-            val config = repo.loadServerConfig()
-            if (!config.isValid() || config.gatewayId.isBlank()) {
-                delay(POLL_INTERVAL_MS)
-                continue
-            }
+            val delayMs = try {
+                val config = repo.loadServerConfig()
+                if (!config.isValid() || config.gatewayId.isBlank()) {
+                    consecutivePollFailures = 0
+                    POLL_IDLE_INTERVAL_MS
+                } else {
+                    recoverInFlightCommands(repo, config)
+                    val commands = ServerApi.fetchPendingCommands(config, 50)
+                    if (commands.isNotEmpty()) {
+                        val relays = repo.loadRelays()
+                        val relaysByKey = relays.associateBy { normalizePhone(it.phoneNumber) }
+                        val history = repo.loadHistory().toMutableList()
+                        var events = repo.loadEvents()
+                        val blockedRelayKeys = mutableSetOf<String>()
 
-            recoverInFlightCommands(repo, config)
+                        for (item in commands) {
+                            val relayKey = normalizePhone(item.relayPhone)
+                            if (relayKey.isNotBlank() && blockedRelayKeys.contains(relayKey)) {
+                                continue
+                            }
 
-            val commands = ServerApi.fetchPendingCommands(config, 50)
-            if (commands.isNotEmpty()) {
-                val relays = repo.loadRelays()
-                val relaysByKey = relays.associateBy { normalizePhone(it.phoneNumber) }
-                val history = repo.loadHistory().toMutableList()
-                var events = repo.loadEvents()
-                val blockedRelayKeys = mutableSetOf<String>()
+                            if (wasSentRecently(item.id)) {
+                                val statusFixed = updateCommandStatusWithRetry(
+                                    config = config,
+                                    commandId = item.id,
+                                    status = "sent_waiting",
+                                    responseText = "duplicate_guard_already_sent"
+                                )
+                                if (statusFixed && relayKey.isNotBlank()) {
+                                    blockedRelayKeys.add(relayKey)
+                                }
+                                continue
+                            }
 
-                for (item in commands) {
-                    val relayKey = normalizePhone(item.relayPhone)
-                    if (relayKey.isNotBlank() && blockedRelayKeys.contains(relayKey)) {
-                        continue
-                    }
+                            if (isSyncSmsCommand(item.command)) {
+                                syncFromInboxForRelay(repo, item.relayPhone)
+                                ServerApi.updateCommandStatus(config, item.id, "done", "manual_sms_sync_done")
+                                continue
+                            }
 
-                    if (wasSentRecently(item.id)) {
-                        val statusFixed = updateCommandStatusWithRetry(
-                            config = config,
-                            commandId = item.id,
-                            status = "sent_waiting",
-                            responseText = "duplicate_guard_already_sent"
-                        )
-                        if (statusFixed && relayKey.isNotBlank()) {
-                            blockedRelayKeys.add(relayKey)
-                        }
-                        continue
-                    }
+                            if (isScrapeCommand(item.command)) {
+                                val relay = relaysByKey[normalizePhone(item.relayPhone)]
+                                val parsed = parseScrapeCommand(item.command)
+                                if (relay != null && parsed != null) {
+                                    val (start, end) = parsed
+                                    val mergedEvents = EventScraper.scrapeRelayEvents(
+                                        applicationContext,
+                                        relay,
+                                        start,
+                                        end,
+                                        events
+                                    )
+                                    val added = mergedEvents.size - events.size
+                                    repo.saveEvents(mergedEvents)
+                                    events = mergedEvents
+                                    ServerApi.updateCommandStatus(config, item.id, "done", "events=$added")
+                                } else {
+                                    ServerApi.updateCommandStatus(config, item.id, "failed", "invalid_relay_or_range")
+                                }
+                                continue
+                            }
 
-                    if (isSyncSmsCommand(item.command)) {
-                        syncFromInboxForRelay(repo, item.relayPhone)
-                        ServerApi.updateCommandStatus(config, item.id, "done", "manual_sms_sync_done")
-                        continue
-                    }
+                            val ok = SmsSender.sendSms(applicationContext, item.relayPhone, item.command)
+                            if (ok) {
+                                markSentNow(item.id)
+                                updateCommandStatusWithRetry(config, item.id, "sent_waiting")
+                            } else {
+                                // Keep command pending so transient SMS gateway failures do not stop the flow.
+                                updateCommandStatusWithRetry(
+                                    config,
+                                    item.id,
+                                    "pending",
+                                    "send_sms_failed_retry_poll"
+                                )
+                            }
 
-                    if (isScrapeCommand(item.command)) {
-                        val relay = relaysByKey[normalizePhone(item.relayPhone)]
-                        val parsed = parseScrapeCommand(item.command)
-                        if (relay != null && parsed != null) {
-                            val (start, end) = parsed
-                            val mergedEvents = EventScraper.scrapeRelayEvents(
-                                applicationContext,
-                                relay,
-                                start,
-                                end,
-                                events
+                            val relay = relaysByKey[normalizePhone(item.relayPhone)]
+                            history.add(
+                                0,
+                                CommandHistory(
+                                    id = System.currentTimeMillis(),
+                                    relayName = relay?.name ?: "Relay ${item.relayPhone}",
+                                    relayPhone = item.relayPhone,
+                                    command = item.command,
+                                    description = item.description.ifBlank { "Comanda din desktop" },
+                                    timestamp = System.currentTimeMillis(),
+                                    status = if (ok) "trimis" else "eroare"
+                                )
                             )
-                            val added = mergedEvents.size - events.size
-                            repo.saveEvents(mergedEvents)
-                            events = mergedEvents
-                            ServerApi.updateCommandStatus(config, item.id, "done", "events=$added")
-                        } else {
-                            ServerApi.updateCommandStatus(config, item.id, "failed", "invalid_relay_or_range")
-                        }
-                        continue
-                    }
 
-                    val ok = SmsSender.sendSms(applicationContext, item.relayPhone, item.command)
-                    if (ok) {
-                        markSentNow(item.id)
-                        updateCommandStatusWithRetry(config, item.id, "sent_waiting")
-                    } else {
-                        // Keep command pending so transient SMS gateway failures do not stop the flow.
-                        updateCommandStatusWithRetry(
-                            config,
-                            item.id,
-                            "pending",
-                            "send_sms_failed_retry_poll"
-                        )
-                    }
-
-                    val relay = relaysByKey[normalizePhone(item.relayPhone)]
-                    history.add(
-                        0,
-                        CommandHistory(
-                            id = System.currentTimeMillis(),
-                            relayName = relay?.name ?: "Relay ${item.relayPhone}",
-                            relayPhone = item.relayPhone,
-                            command = item.command,
-                            description = item.description.ifBlank { "Comanda din desktop" },
-                            timestamp = System.currentTimeMillis(),
-                            status = if (ok) "trimis" else "eroare"
-                        )
-                    )
-
-                    if (ok) {
-                        if (relayKey.isNotBlank()) {
-                            // Keep one in-flight command per relay in this poll cycle.
-                            blockedRelayKeys.add(relayKey)
-                        }
-                        val sentAt = System.currentTimeMillis()
-                        scope.launch {
-                            when {
-                                isForcePasswordCommand(item.command) -> {
-                                    delay(PASSWORD_STEP_TIMEOUT_MS)
-                                    updateCommandStatusWithRetry(config, item.id, "done", "setup_step1_timeout_15s")
+                            if (ok) {
+                                if (relayKey.isNotBlank()) {
+                                    // Keep one in-flight command per relay in this poll cycle.
+                                    blockedRelayKeys.add(relayKey)
                                 }
-                                isSetupUsersQueryCommand(item.command) -> {
-                                    val setupConfirmed = waitForSetupUsersQueryCompletion(repo, item.relayPhone, sentAt, item.command)
-                                    if (setupConfirmed) {
-                                        updateCommandStatusWithRetry(config, item.id, "done", "setup_query_999_confirmed")
-                                        handleConfirmedSetupUsersQuery(repo, config, item, history)
+                                val sentAt = System.currentTimeMillis()
+                                scope.launch {
+                                    when {
+                                        isForcePasswordCommand(item.command) -> {
+                                            delay(PASSWORD_STEP_TIMEOUT_MS)
+                                            updateCommandStatusWithRetry(config, item.id, "done", "setup_step1_timeout_15s")
+                                        }
+                                        isSetupUsersQueryCommand(item.command) -> {
+                                            val setupConfirmed = waitForSetupUsersQueryCompletion(repo, item.relayPhone, sentAt, item.command)
+                                            if (setupConfirmed) {
+                                                updateCommandStatusWithRetry(config, item.id, "done", "setup_query_999_confirmed")
+                                                handleConfirmedSetupUsersQuery(repo, config, item, history)
+                                            }
+                                        }
+                                        isSetupStepWithSmsReply(item.command) -> {
+                                            val setupConfirmed = waitForSetupStepReply(item.command, item.relayPhone, sentAt)
+                                            syncFromInboxForRelay(repo, item.relayPhone)
+                                            if (setupConfirmed) {
+                                                updateCommandStatusWithRetry(config, item.id, "done", "setup_marker_confirmed")
+                                            }
+                                        }
+                                        okCommandNeedsSync(item.command) -> {
+                                            scheduleSmsSync(repo, item.relayPhone)
+                                        }
                                     }
-                                }
-                                isSetupStepWithSmsReply(item.command) -> {
-                                    val setupConfirmed = waitForSetupStepReply(item.command, item.relayPhone, sentAt)
-                                    syncFromInboxForRelay(repo, item.relayPhone)
-                                    if (setupConfirmed) {
-                                        updateCommandStatusWithRetry(config, item.id, "done", "setup_marker_confirmed")
-                                    }
-                                }
-                                okCommandNeedsSync(item.command) -> {
-                                    scheduleSmsSync(repo, item.relayPhone)
                                 }
                             }
                         }
+
+                        repo.saveHistory(history.take(200))
+                        val latestRelays = repo.loadRelays()
+                        val latestEvents = repo.loadEvents()
+                        ServerApi.uploadSnapshot(
+                            config,
+                            ServerSnapshot(
+                                relays = latestRelays,
+                                history = history.take(SNAPSHOT_HISTORY_LIMIT),
+                                events = latestEvents.take(SNAPSHOT_EVENTS_LIMIT)
+                            )
+                        )
+                        consecutivePollFailures = 0
+                        POLL_ACTIVE_INTERVAL_MS
+                    } else {
+                        consecutivePollFailures = 0
+                        POLL_IDLE_INTERVAL_MS
                     }
                 }
+            } catch (_: Exception) {
+                consecutivePollFailures = (consecutivePollFailures + 1)
+                    .coerceAtMost(POLL_ERROR_MAX_BACKOFF_STEPS)
 
-                repo.saveHistory(history.take(200))
-                val latestRelays = repo.loadRelays()
-                val latestEvents = repo.loadEvents()
-                ServerApi.uploadSnapshot(config, ServerSnapshot(latestRelays, history.take(200), latestEvents))
+                var backoff = POLL_ERROR_BASE_DELAY_MS
+                if (consecutivePollFailures > 1) {
+                    repeat(consecutivePollFailures - 1) {
+                        backoff = (backoff * 2).coerceAtMost(POLL_ERROR_MAX_DELAY_MS)
+                    }
+                }
+                backoff
             }
 
-            delay(POLL_INTERVAL_MS)
+            delay(delayMs)
         }
     }
 
@@ -515,7 +540,14 @@ class CommandPollService : Service() {
 
         val config = repo.loadServerConfig()
         if (config.isValid()) {
-            ServerApi.uploadSnapshot(config, ServerSnapshot(updatedRelays, updatedHistory.take(200), events))
+            ServerApi.uploadSnapshot(
+                config,
+                ServerSnapshot(
+                    relays = updatedRelays,
+                    history = updatedHistory.take(SNAPSHOT_HISTORY_LIMIT),
+                    events = events.take(SNAPSHOT_EVENTS_LIMIT)
+                )
+            )
         }
     }
 
@@ -720,7 +752,11 @@ class CommandPollService : Service() {
     companion object {
         private const val CHANNEL_ID = "gsm_gateway"
         private const val NOTIFICATION_ID = 5174
-        private const val POLL_INTERVAL_MS = 30_000L
+        private const val POLL_ACTIVE_INTERVAL_MS = 15_000L
+        private const val POLL_IDLE_INTERVAL_MS = 60_000L
+        private const val POLL_ERROR_BASE_DELAY_MS = 8_000L
+        private const val POLL_ERROR_MAX_DELAY_MS = 120_000L
+        private const val POLL_ERROR_MAX_BACKOFF_STEPS = 6
         private const val PASSWORD_STEP_TIMEOUT_MS = 15_000L
         private const val SETUP_STEP_TIMEOUT_MS = 20_000L
         private const val SETUP_QUERY_TIMEOUT_MS = 240_000L
@@ -730,6 +766,8 @@ class CommandPollService : Service() {
         private const val SETUP_STEP_RETRY_TIMEOUT_MS = 30_000L
         private const val SETUP_QUERY_RETRY_TIMEOUT_MS = 90_000L
         private const val GENERIC_COMMAND_RETRY_TIMEOUT_MS = 45_000L
+        private const val SNAPSHOT_HISTORY_LIMIT = 200
+        private const val SNAPSHOT_EVENTS_LIMIT = 200
         private const val MAX_LEGACY_SENT_AGE_MS = 12 * 60 * 60 * 1000L
         private const val RECENT_SENT_WINDOW_MS = 20 * 60 * 1000L
         private val ADMIN_PHONES = listOf(

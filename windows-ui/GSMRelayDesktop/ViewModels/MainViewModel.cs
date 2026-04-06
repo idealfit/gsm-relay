@@ -1701,7 +1701,6 @@ public class MainViewModel : INotifyPropertyChanged
     {
         if (IsBusy) return false;
         if (!ServerConfig.IsValid()) return false;
-        if (string.IsNullOrWhiteSpace(ServerConfig.GatewayId)) return false;
         if (SelectedRelay == null) return false;
         return TryBuildScrapeRange(out _, out _);
     }
@@ -1715,20 +1714,15 @@ public class MainViewModel : INotifyPropertyChanged
             return;
         }
         var cmd = $"SCRAPE_EVENTS|{start}|{end}";
-        var result = await _apiClient.CreateCommandAsync(
-            ServerConfig,
-            SelectedRelay.PhoneNumber,
+        var ok = await SendCommandToRelayAsync(
+            SelectedRelay,
             cmd,
             "Scrape events",
-            "desktop"
+            refreshCommands: false,
+            showErrorPopup: true,
+            source: "desktop"
         );
-        if (!result.Ok)
-        {
-            StatusMessage = result.StatusCode == 404
-                ? "Serverul nu are /api/commands"
-                : $"Cerere respinsa (HTTP {result.StatusCode})";
-            return;
-        }
+        if (!ok) return;
         StatusMessage = "Cerere scraping trimisa catre gateway";
         await RefreshCommandsAsync(false);
     }
